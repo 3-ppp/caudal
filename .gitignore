@@ -1,0 +1,12 @@
+data/latest.json
+data/climatology.json
+node_modules/
+data/extras.json
+data/heights-history.json
+data/dam-*.json
+data/sat/
+data/tiles/
+data/analytics.json
+data/analytics-today.json
+data/stats-key
+capturas/

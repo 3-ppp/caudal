@@ -1,0 +1,440 @@
+{
+ "_nota": "Alturas de alerta y evacuación de Prefectura Naval (lectura del 2026-10-13). Se usan cuando la fuente de alturas no las trae (p. ej. el respaldo del INA).",
+ "puertos": {
+  "ANDRESITO": {
+   "river": "IGUAZU",
+   "alert_m": 10.5,
+   "evac_m": 13.5
+  },
+  "IGUAZU": {
+   "river": "IGUAZU",
+   "alert_m": 25,
+   "evac_m": 28
+  },
+  "LIBERTAD": {
+   "river": "PARANA",
+   "alert_m": 29,
+   "evac_m": 31
+  },
+  "ELDORADO": {
+   "river": "PARANA",
+   "alert_m": 23,
+   "evac_m": 25
+  },
+  "LIBERTADOR": {
+   "river": "PARANA",
+   "alert_m": 14.5,
+   "evac_m": 15.5
+  },
+  "PUERTO MANI": {
+   "river": "PARANA",
+   "alert_m": 9.5,
+   "evac_m": 10
+  },
+  "SANTA ANA": {
+   "river": "PARANA",
+   "alert_m": 9.3,
+   "evac_m": 9.8
+  },
+  "POSADAS": {
+   "river": "PARANA",
+   "alert_m": 11,
+   "evac_m": 12
+  },
+  "ITUZAINGO": {
+   "river": "PARANA",
+   "alert_m": 3.5,
+   "evac_m": 4
+  },
+  "ITA IBATE": {
+   "river": "PARANA",
+   "alert_m": 7,
+   "evac_m": 7.5
+  },
+  "ITATI": {
+   "river": "PARANA",
+   "alert_m": 6.8,
+   "evac_m": 7.5
+  },
+  "PASO DE LA PATRIA": {
+   "river": "PARANA",
+   "alert_m": 6.5,
+   "evac_m": 7
+  },
+  "CORRIENTES": {
+   "river": "PARANA",
+   "alert_m": 6.5,
+   "evac_m": 7
+  },
+  "BARRANQUERAS": {
+   "river": "PARANA",
+   "alert_m": 6,
+   "evac_m": 6.5
+  },
+  "EMPEDRADO": {
+   "river": "PARANA",
+   "alert_m": 6.5,
+   "evac_m": 7
+  },
+  "BELLA VISTA": {
+   "river": "PARANA",
+   "alert_m": 6,
+   "evac_m": 6.4
+  },
+  "GOYA": {
+   "river": "PARANA",
+   "alert_m": 5.2,
+   "evac_m": 5.7
+  },
+  "RECONQUISTA": {
+   "river": "PARANA",
+   "alert_m": 5.1,
+   "evac_m": 5.3
+  },
+  "ESQUINA": {
+   "river": "PARANA",
+   "alert_m": 5,
+   "evac_m": 5.4
+  },
+  "SAN JAVIER (SANTA FE)": {
+   "river": "SAN JAVIER",
+   "alert_m": 6,
+   "evac_m": 6.5
+  },
+  "LA PAZ": {
+   "river": "PARANA",
+   "alert_m": 5.8,
+   "evac_m": 6.15
+  },
+  "SANTA ELENA": {
+   "river": "PARANA",
+   "alert_m": 6.9,
+   "evac_m": 7.25
+  },
+  "HERNANDARIAS": {
+   "river": "PARANA",
+   "alert_m": 5.5,
+   "evac_m": 6
+  },
+  "PARANA": {
+   "river": "PARANA",
+   "alert_m": 4.7,
+   "evac_m": 5
+  },
+  "SANTA FE": {
+   "river": "PARANA",
+   "alert_m": 5.3,
+   "evac_m": 5.7
+  },
+  "DIAMANTE": {
+   "river": "PARANA",
+   "alert_m": 5.3,
+   "evac_m": 5.5
+  },
+  "VICTORIA": {
+   "river": "PARANA",
+   "alert_m": 4.6,
+   "evac_m": 4.9
+  },
+  "SAN LORENZO": {
+   "river": "PARANA",
+   "alert_m": 5.2,
+   "evac_m": 5.7
+  },
+  "ROSARIO": {
+   "river": "PARANA",
+   "alert_m": 5,
+   "evac_m": 5.3
+  },
+  "VILLA CONSTITUCION": {
+   "river": "PARANA",
+   "alert_m": 4,
+   "evac_m": 4.5
+  },
+  "SAN NICOLAS": {
+   "river": "PARANA",
+   "alert_m": 4.2,
+   "evac_m": 5
+  },
+  "RAMALLO": {
+   "river": "PARANA",
+   "alert_m": 3.5,
+   "evac_m": 4
+  },
+  "SAN PEDRO": {
+   "river": "DELTA PARANA",
+   "alert_m": 3.4,
+   "evac_m": 3.6
+  },
+  "BARADERO": {
+   "river": "DELTA PARANA",
+   "alert_m": 2.7,
+   "evac_m": 3.1
+  },
+  "ZARATE": {
+   "river": "DELTA PARANA",
+   "alert_m": 2.2,
+   "evac_m": 2.4
+  },
+  "CAMPANA": {
+   "river": "DELTA PARANA",
+   "alert_m": 2.2,
+   "evac_m": 2.45
+  },
+  "ESCOBAR": {
+   "river": "DELTA PARANA",
+   "alert_m": 3,
+   "evac_m": 3.5
+  },
+  "CANAL NUEVO": {
+   "river": "DELTA PARANA",
+   "alert_m": 2.85,
+   "evac_m": 3
+  },
+  "PUERTO RUIZ": {
+   "river": "GUALEGUAY",
+   "alert_m": 4.5,
+   "evac_m": 5
+  },
+  "IBICUY": {
+   "river": "IBICUY",
+   "alert_m": 2,
+   "evac_m": 2.3
+  },
+  "GUAZUCITO": {
+   "river": "DELTA PARANA",
+   "alert_m": 2.2,
+   "evac_m": 2.4
+  },
+  "MARTIN GARCIA": {
+   "river": "DELTA PARANA",
+   "alert_m": 2.5,
+   "evac_m": 5
+  },
+  "TIGRE": {
+   "river": "DELTA PARANA",
+   "alert_m": 3.3,
+   "evac_m": 3.8
+  },
+  "DIQUE LUJAN": {
+   "river": "DELTA PARANA",
+   "alert_m": 2.3,
+   "evac_m": 2.8
+  },
+  "CHANA MINI": {
+   "river": "DELTA PARANA",
+   "alert_m": 3.2,
+   "evac_m": 3.8
+  },
+  "SAN FERNANDO": {
+   "river": "DELTA PARANA",
+   "alert_m": 3,
+   "evac_m": 3.5
+  },
+  "SAN ISIDRO": {
+   "river": "DELTA PARANA",
+   "alert_m": 3,
+   "evac_m": 3.5
+  },
+  "OLIVOS": {
+   "river": "DELTA PARANA",
+   "alert_m": 3,
+   "evac_m": 3.8
+  },
+  "EMBALSE RIO HONDO": {
+   "river": "EMBALSE RIO HONDO",
+   "alert_m": 2.74,
+   "evac_m": 2.75
+  },
+  "PILCOMAYO": {
+   "river": "PARAGUAY",
+   "alert_m": 5.35,
+   "evac_m": 6
+  },
+  "BOUVIER": {
+   "river": "PARAGUAY",
+   "alert_m": 6,
+   "evac_m": 6.4
+  },
+  "FORMOSA": {
+   "river": "PARAGUAY",
+   "alert_m": 7.8,
+   "evac_m": 8.3
+  },
+  "BERMEJO": {
+   "river": "PARAGUAY",
+   "alert_m": 6.5,
+   "evac_m": 7
+  },
+  "LAS PALMAS": {
+   "river": "PARAGUAY",
+   "alert_m": 6.5,
+   "evac_m": 7
+  },
+  "ISLA DEL CERRITO": {
+   "river": "PARAGUAY",
+   "alert_m": 6.2,
+   "evac_m": 6.8
+  },
+  "EL SOBERBIO": {
+   "river": "URUGUAY",
+   "alert_m": 11,
+   "evac_m": 13
+  },
+  "ALBA POSSE": {
+   "river": "URUGUAY",
+   "alert_m": 8,
+   "evac_m": 12
+  },
+  "PANAMBI": {
+   "river": "URUGUAY",
+   "alert_m": 7,
+   "evac_m": 9
+  },
+  "SAN JAVIER": {
+   "river": "URUGUAY",
+   "alert_m": 8,
+   "evac_m": 10
+  },
+  "PUERTO CONCEPCION": {
+   "river": "URUGUAY",
+   "alert_m": 16.5,
+   "evac_m": 17.5
+  },
+  "GARRUCHOS": {
+   "river": "URUGUAY",
+   "alert_m": 12,
+   "evac_m": 14
+  },
+  "SANTO TOME": {
+   "river": "URUGUAY",
+   "alert_m": 11.5,
+   "evac_m": 12.5
+  },
+  "ALVEAR": {
+   "river": "URUGUAY",
+   "alert_m": 9.5,
+   "evac_m": 11
+  },
+  "LA CRUZ": {
+   "river": "URUGUAY",
+   "alert_m": 9.5,
+   "evac_m": 11.5
+  },
+  "YAPEYU": {
+   "river": "URUGUAY",
+   "alert_m": 9.5,
+   "evac_m": 10.5
+  },
+  "PASO DE LOS LIBRES": {
+   "river": "URUGUAY",
+   "alert_m": 7.5,
+   "evac_m": 8.5
+  },
+  "BOMPLAND": {
+   "river": "URUGUAY",
+   "alert_m": 7.9,
+   "evac_m": 10.8
+  },
+  "MONTE CASEROS": {
+   "river": "URUGUAY",
+   "alert_m": 7.5,
+   "evac_m": 8.5
+  },
+  "MOCORETA": {
+   "river": "URUGUAY",
+   "alert_m": 10.3,
+   "evac_m": 12
+  },
+  "FEDERACION": {
+   "river": "URUGUAY",
+   "alert_m": 3.9,
+   "evac_m": 4.2
+  },
+  "FEDERACION EMBALSE": {
+   "river": "URUGUAY",
+   "alert_m": 36.15,
+   "evac_m": 36.45
+  },
+  "SALTO GRANDE ARRIBA": {
+   "river": "URUGUAY",
+   "alert_m": 35.8,
+   "evac_m": 36.3
+  },
+  "SALTO GRANDE ABAJO": {
+   "river": "URUGUAY",
+   "alert_m": 17.3,
+   "evac_m": 17.8
+  },
+  "CONCORDIA": {
+   "river": "URUGUAY",
+   "alert_m": 11,
+   "evac_m": 12.5
+  },
+  "YERUA": {
+   "river": "URUGUAY",
+   "alert_m": 11,
+   "evac_m": 12.5
+  },
+  "LA CALERA": {
+   "river": "URUGUAY",
+   "alert_m": 9,
+   "evac_m": 11
+  },
+  "COLON": {
+   "river": "URUGUAY",
+   "alert_m": 7.1,
+   "evac_m": 7.9
+  },
+  "CONCEPCION DEL URUGUAY": {
+   "river": "URUGUAY",
+   "alert_m": 5.3,
+   "evac_m": 6.3
+  },
+  "CAMPICHUELO": {
+   "river": "URUGUAY",
+   "alert_m": 5.3,
+   "evac_m": 6.3
+  },
+  "GUALEGUAYCHU": {
+   "river": "GUALEGUAYCHU",
+   "alert_m": 3.5,
+   "evac_m": 3.8
+  },
+  "BOCA GUALEGUAYCHU": {
+   "river": "GUALEGUAYCHU",
+   "alert_m": 2.9,
+   "evac_m": 3.1
+  },
+  "PARANACITO": {
+   "river": "URUGUAY",
+   "alert_m": 2.3,
+   "evac_m": 2.6
+  },
+  "BUENOS AIRES": {
+   "river": "DE LA PLATA",
+   "alert_m": 3.3,
+   "evac_m": 3.9
+  },
+  "LA PLATA": {
+   "river": "DE LA PLATA",
+   "alert_m": 2.5,
+   "evac_m": 2.8
+  },
+  "BRAGA": {
+   "river": "DE LA PLATA",
+   "alert_m": 2.8,
+   "evac_m": 3.2
+  },
+  "SANTA TERESITA": {
+   "river": "DE LA PLATA",
+   "alert_m": 2.6,
+   "evac_m": 5
+  },
+  "ATALAYA": {
+   "river": "DE LA PLATA",
+   "alert_m": 2.8,
+   "evac_m": 3
+  }
+ }
+}

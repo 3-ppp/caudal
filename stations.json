@@ -1,0 +1,39 @@
+{
+  "_nota": "Puntos sobre el Paraná, de su nacimiento (confluencia Paranaíba–Grande) al Delta. lat/lon nominales; scripts/calibrate.mjs los ajusta a la celda del cauce principal en la grilla GloFAS (0.05°). 'r' = radio de búsqueda en grados.",
+  "main": [
+    { "id": "nacimiento",   "name": "Nacimiento",          "sub": "Paranaíba + Grande",   "lat": -20.10, "lon": -51.02, "r": 0.10 },
+    { "id": "jupia",        "name": "Três Lagoas",         "sub": "represa Jupiá",        "lat": -20.78, "lon": -51.63, "r": 0.10 },
+    { "id": "primavera",    "name": "Porto Primavera",     "sub": "",                     "lat": -22.47, "lon": -52.97, "r": 0.10 },
+    { "id": "guaira",       "name": "Guaíra",              "sub": "Salto del Guairá",     "lat": -24.07, "lon": -54.27, "r": 0.10 },
+    { "id": "itaipu",       "name": "Itaipú",              "sub": "Foz · Ciudad del Este", "lat": -25.43, "lon": -54.60, "r": 0.05 },
+    { "id": "posadas",      "name": "Posadas",             "sub": "Encarnación",          "lat": -27.37, "lon": -55.90, "r": 0.10 },
+    { "id": "yacyreta",     "name": "Yacyretá",            "sub": "Ituzaingó · Ayolas",   "lat": -27.47, "lon": -56.78, "r": 0.10 },
+    { "id": "itati",        "name": "Itatí",               "sub": "Paso de la Patria",    "lat": -27.27, "lon": -58.24, "r": 0.10 },
+    { "id": "corrientes",   "name": "Corrientes",          "sub": "Resistencia · Barranqueras", "lat": -27.47, "lon": -58.85, "r": 0.10 },
+    { "id": "bellavista",   "name": "Bella Vista",         "sub": "",                     "lat": -28.51, "lon": -59.05, "r": 0.10 },
+    { "id": "goya",         "name": "Goya",                "sub": "Reconquista",          "lat": -29.14, "lon": -59.30, "r": 0.15 },
+    { "id": "lapaz",        "name": "La Paz",              "sub": "",                     "lat": -30.74, "lon": -59.65, "r": 0.10 },
+    { "id": "santafe",      "name": "Santa Fe",            "sub": "Paraná",               "lat": -31.70, "lon": -60.52, "r": 0.15 },
+    { "id": "diamante",     "name": "Diamante",            "sub": "",                     "lat": -32.07, "lon": -60.65, "r": 0.10 },
+    { "id": "rosario",      "name": "Rosario",             "sub": "Victoria",             "lat": -32.95, "lon": -60.63, "r": 0.15 },
+    { "id": "sannicolas",   "name": "San Nicolás",         "sub": "Villa Constitución",   "lat": -33.33, "lon": -60.21, "r": 0.10 },
+    { "id": "sanpedro",     "name": "San Pedro",           "sub": "",                     "lat": -33.68, "lon": -59.66, "r": 0.10 },
+    { "id": "delta",        "name": "Delta",               "sub": "Zárate · Campana",     "lat": -34.10, "lon": -59.02, "r": 0.15 }
+  ],
+  "tributaries": [
+    { "id": "iguazu",   "name": "Iguazú",   "sub": "llega antes de Posadas",  "joins": "itaipu",  "lat": -25.68, "lon": -54.44, "r": 0.05 },
+    { "id": "paraguay", "name": "Paraguay", "sub": "llega antes de Corrientes", "joins": "itati",  "lat": -26.86, "lon": -58.30, "r": 0.10 }
+  ],
+  "uruguay": [
+    { "id": "marcelino",    "name": "Marcelino Ramos",    "sub": "Alto Uruguay",          "lat": -27.46, "lon": -51.90, "r": 0.10 },
+    { "id": "irai",         "name": "Iraí",               "sub": "",                      "lat": -27.19, "lon": -53.25, "r": 0.10 },
+    { "id": "elsoberbio",   "name": "El Soberbio",        "sub": "Porto Soberbo",         "lat": -27.30, "lon": -54.20, "r": 0.10 },
+    { "id": "santotome",    "name": "Santo Tomé",         "sub": "São Borja",             "lat": -28.55, "lon": -56.04, "r": 0.10 },
+    { "id": "pasolibres",   "name": "Paso de los Libres", "sub": "Uruguaiana",            "lat": -29.71, "lon": -57.09, "r": 0.10 },
+    { "id": "montecaseros", "name": "Monte Caseros",      "sub": "Bella Unión · Barra do Quaraí", "lat": -30.25, "lon": -57.64, "r": 0.10 },
+    { "id": "concordia",    "name": "Concordia",          "sub": "Salto · represa Salto Grande", "lat": -31.39, "lon": -57.99, "r": 0.10 },
+    { "id": "colon",        "name": "Colón",              "sub": "Paysandú",              "lat": -32.25, "lon": -58.11, "r": 0.10 },
+    { "id": "fraybentos",   "name": "Fray Bentos",        "sub": "Gualeguaychú",          "lat": -33.12, "lon": -58.31, "r": 0.08 },
+    { "id": "nuevapalmira", "name": "Nueva Palmira",      "sub": "desembocadura",         "lat": -33.88, "lon": -58.42, "r": 0.05 }
+  ]
+}

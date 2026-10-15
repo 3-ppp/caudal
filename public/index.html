@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>:~# caudal</title>
+  <meta name="description" content="Monitor diario del caudal de los ríos Paraná y Uruguay, de sus nacientes al Río de la Plata.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/favicon.svg">
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="statusbar" role="banner">
+    <div class="sb-brand">
+      <span class="sb-name"><span class="prompt" aria-hidden="true">:~#</span> caudal<span class="cursor" aria-hidden="true">_</span></span>
+      <span class="sb-sub">cuenca del plata · en vivo</span>
+    </div>
+    <ul class="sb-sources" id="sources" aria-label="Estado de las fuentes"></ul>
+    <div class="sb-right">
+      <span id="clock" class="sb-clock"></span>
+      <button id="theme" class="sb-btn" type="button" aria-label="Cambiar entre tema claro y oscuro">oscuro</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="map-col" aria-label="Mapa de la cuenca">
+      <header class="title">
+        <p class="prompt-line" aria-hidden="true"><span id="site-host">:~# caudal</span> <span class="cursor">_</span></p>
+        <h1>Paraná y Uruguay</h1>
+        <p class="tagline">monitor de caudales, día a día</p>
+        <p class="lede">El caudal de los ríos, día a día, desde donde nacen hasta el Río de la Plata.</p>
+      </header>
+      <div class="map-wrap">
+        <div class="map-ctl" role="group" aria-label="Zoom del mapa">
+          <button class="btn" id="zin" type="button" aria-label="Acercar">+</button>
+          <button class="btn" id="zout" type="button" aria-label="Alejar">−</button>
+          <button class="btn" id="zhome" type="button" aria-label="Ver toda la cuenca">⟲</button>
+          <button class="btn btn-sat" id="zsat" type="button" aria-pressed="false">satélite</button>
+        </div>
+        <svg id="map" role="img" aria-label="Mapa de los ríos Paraná y Uruguay: el ancho del trazo es el caudal, el color su diferencia con lo normal para la fecha"></svg>
+        <svg id="map-axes" class="map-axes" aria-hidden="true"></svg>
+        <div class="coords" id="coords" aria-hidden="true"></div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <section class="panel" aria-label="Datos">
+      <section class="kpis" id="kpis" aria-label="Situación de hoy"></section>
+
+      <div class="time">
+        <div class="time-head">
+          <button id="play" class="btn" type="button" aria-label="Reproducir">▶</button>
+          <div class="time-label">
+            <strong id="date-label">—</strong>
+            <span id="date-rel" class="muted"></span>
+          </div>
+          <button id="today" class="btn btn-text" type="button">hoy</button>
+        </div>
+        <input id="slider" type="range" min="0" max="0" value="0" aria-label="Fecha">
+        <div class="time-scale muted"><span id="t-start"></span><span>hoy</span><span id="t-end"></span></div>
+      </div>
+
+      <article class="card">
+        <div class="card-head">
+          <div><p class="kicker">perfil</p><h2 id="prof-title">A lo largo del río</h2></div>
+          <div class="seg" id="prof-tabs" role="tablist" aria-label="Río"><button type="button" role="tab" data-river="parana">Paraná</button><button type="button" role="tab" data-river="uruguay">Uruguay</button></div>
+        </div>
+        <p class="muted small">Caudal en cada punto, ordenado por kilómetros desde el nacimiento. La banda es el rango habitual para esa fecha. Los dos ríos comparten escala.</p>
+        <svg id="profile" class="chart" role="img" aria-label="Perfil de caudal a lo largo del río"></svg>
+      </article>
+
+      <article class="card" id="detail">
+        <div class="detail-head">
+          <div>
+            <p class="kicker">punto-del-río</p>
+            <h2 id="st-name">—</h2>
+            <p id="st-sub" class="muted small"></p>
+          </div>
+          <div class="head-ctl"><button id="st-focus" class="btn btn-text btn-small" type="button">ver en el mapa</button>
+          <select id="st-select" aria-label="Elegir punto del río"></select></div>
+        </div>
+        <div class="stats" id="stats"></div>
+        <p id="dam-note" class="note small" hidden></p>
+        <svg id="series" class="chart" role="img" aria-label="Caudal en el tiempo"></svg>
+        <div class="series-key small muted" id="series-key"></div>
+        <section id="heights" class="sub-block" hidden></section>
+        <figure id="sat" class="sub-block sat" hidden></figure>
+      </article>
+
+      <article class="card" id="dams-card" hidden>
+        <p class="kicker">represas</p>
+        <h2>Lo que sale de cada represa</h2>
+        <p class="muted small">Caudal que sale de cada represa, medido por su operador, junto al caudal que estima el modelo en ese punto.</p>
+        <div id="dams"></div>
+      </article>
+
+      <article class="card">
+        <p class="kicker">todos-los-puntos</p>
+        <h2>Todos los puntos</h2>
+        <div class="table-wrap">
+          <table id="table">
+            <thead><tr><th>Punto</th><th class="num">km</th><th class="num">m³/s</th><th class="num">vs. normal</th><th class="num">7 días</th><th class="num">altura</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </article>
+
+      <footer class="foot small muted">
+        <p>Caudal modelado por <a href="https://global-flood.emergency.copernicus.eu/" target="_blank" rel="noopener">GloFAS</a> (Copernicus), servido por <a href="https://open-meteo.com/en/docs/flood-api" target="_blank" rel="noopener">Open-Meteo</a>. No es una medición: puede diferir de los registros oficiales. Lo normal es el rango 2000–2024 para cada fecha. Alturas: Prefectura Naval. Represas: ONS, EBY (vía INA), CTM Salto Grande. Imágenes: Sentinel-2 cloudless de EOX y Copernicus GFM. Cartografía: Natural Earth.</p>
+        <p>Para alertas y evacuaciones, consultá al <a href="https://www.ina.gob.ar/alerta/" target="_blank" rel="noopener">INA</a>, a Prefectura y a Defensa Civil.</p>
+        <p>Este sitio cuenta visitas sin cookies ni datos personales: solo totales por día.</p>
+        <p id="updated"></p>
+      </footer>
+    </section>
+  </main>
+  <div id="tip" class="tip" role="tooltip" hidden></div>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

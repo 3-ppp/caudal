@@ -380,3 +380,38 @@ dl.kv dd { margin: 0; font-weight: 600; color: var(--strong); }
 td.bar { color: var(--accent); width: 100%; padding-right: 0; letter-spacing: -1px; }
 .stats-page tbody tr { cursor: default; }
 .stats-page tbody tr:hover td { background: none; color: inherit; }
+
+/* ---------- plegables: menos texto a la vista, todo a un clic */
+details > summary { cursor: pointer; list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details.help > summary, details.more > summary, details.fold > summary { color: var(--ink-2); font-size: 12.5px; }
+details.help > summary::before, details.more > summary::before, details.fold > summary::before { content: "[+] "; color: var(--accent); font-weight: 600; }
+details[open].help > summary::before, details[open].more > summary::before, details[open].fold > summary::before { content: "[−] "; }
+details > summary:hover { text-decoration: underline; }
+details.help { margin: 2px 0 6px; }
+details.help p { margin: 4px 0 0; }
+details.more { margin-top: 8px; }
+#sat-box > summary, .table-fold > summary { font-size: 13.5px; color: var(--strong); font-weight: 600; }
+.table-fold { margin-top: 4px; }
+/* represas en una línea */
+details.dam { margin: 0; padding: 6px 0; border-top: 1px dashed var(--rule); }
+details.dam:first-child { border-top: 0; }
+details.dam > summary { font-size: 13px; color: var(--ink); }
+details.dam .warn { color: var(--st-critical); font-weight: 600; }
+.dam + .dam { padding-top: 6px; }
+/* pronóstico INA bajo cada hidrómetro */
+.fc-line { margin: 2px 0 0; font-size: 12.5px; line-height: 1.6; }
+.fc-line b { color: var(--strong); }
+.chart-cap { margin: 8px 0 0; font-size: 12px; color: var(--ink-2); }
+.kpi .nw { white-space: nowrap; color: var(--ink-2); font-size: 11.5px; }
+
+/* barra superior: marca, links y tema; el estado de las fuentes va en el pie */
+.statusbar { justify-content: space-between; }
+.sb-link, .sb-link:visited { color: var(--ink); font-weight: 600; text-decoration: none; }
+.sb-link::before { content: "[ "; } .sb-link::after { content: " ]"; }
+.sb-link:hover { text-decoration: underline; }
+.foot-status { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed var(--rule); }
+.foot-status .sb-sources { flex-wrap: wrap; overflow: visible; gap: 4px 14px; }
+.foot-status .sb-clock { display: inline; }
+@media (max-width: 600px) { .sb-sub { display: none; } .sb-right { gap: 8px; } }
+#sat { margin: 8px 0 0; }

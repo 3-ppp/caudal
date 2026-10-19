@@ -267,6 +267,16 @@ async function refreshExtras() {
       catch (e) { out.errors[id] = e.message; }
     }
   }
+  // pronóstico oficial de alturas del INA (semanal): se reconsulta cada 3 h
+  const fina = await optionalImport('forecast-ina');
+  if (fina) {
+    const prevF = prev.forecastINA;
+    if (prevF && Date.now() - Date.parse(prevF.fetchedAt) < 3 * 3600e3) out.forecastINA = prevF;
+    else {
+      try { out.forecastINA = await fina.fetchForecastINA(); }
+      catch (e) { out.errors.pronostico_ina = e.message; out.forecastINA = prevF ?? null; }
+    }
+  }
   const sat = await optionalImport('satellite');
   if (sat) {
     try { out.satellite = { latest: await sat.latestFloodDate(), layers: sat.LAYERS }; }

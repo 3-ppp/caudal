@@ -542,14 +542,23 @@ function drawStats() {
       ? { k: 'Pico previsto', v: fmtQ(st.q[pk]), s: `m³/s · ${dShort(days[pk])}` }
       : { k: 'Próximos 30 días', v: (st.q[last] ?? 0) < (st.q[todayIdx] ?? 0) * 0.98 ? 'en baja' : 'estable', s: 'según el pronóstico' };
   const perDay = q != null ? q * 86400 / 1e9 : null;
+  // donde el INA pronostica, su altura es el dato principal (el pico de GloFAS queda en el gráfico)
+  const fr = portsOf(SEL).find((r) => fcOf(r.port));
+  let ina = null;
+  if (fr) {
+    const f = fcOf(fr.port), pts = f.points.slice(1);
+    const p = pts.find((x) => x.date >= TODAY_AR) || pts.at(-1);
+    if (p) ina = { k: `INA · ${portName(fr.port)} · ${dShort(p.date)}`, v: `${nf2.format(p.mid)} m`,
+      s: `${chip(lvAt(fr, p.mid)) || 'sin alerta'} · rango ${nf2.format(p.lo)}–${nf2.format(p.hi)}` };
+  }
   $('#stats').innerHTML = [
     { k: T === todayIdx ? 'Caudal hoy' : `Caudal · ${dShort(days[T])}`, v: fmtQ(q), s: perDay != null ? `m³/s · ${nf1.format(perDay)} km³ por día` : 'm³/s' },
     { k: 'Frente a lo normal', v: klass(st, T), s: ratio ? `${nf1.format(ratio)} veces la mediana` : '' },
-    peak,
+    ina || peak,
   ].map((x) => `<div class="stat"><div class="k">${x.k}</div><div class="v">${x.v}</div><div class="s">${x.s}</div></div>`).join('');
   const gap = damGap(st);
   $('#dam-note').hidden = !gap;
-  if (gap) $('#dam-note').innerHTML = `<span class="chip alerta"><span class="ico"></span></span> ${gap.name} largó ${fmtQ(gap.q)} m³/s el ${dShort(gap.date)}, ${nf1.format(gap.ratio)} veces lo que estima el modelo para ese punto. El modelo no conoce las maniobras de las represas: aguas abajo, el caudal real puede ser mayor que el que se ve acá.`;
+  if (gap) $('#dam-note').innerHTML = `<span class="chip alerta"><span class="ico"></span></span> ${gap.name} largó ${fmtQ(gap.q)} m³/s el ${dShort(gap.date)}, ${nf1.format(gap.ratio)} veces lo que estima el modelo para ese punto. El modelo no conoce las maniobras de las represas: aguas abajo, el caudal real puede ser mayor.${ina ? ' Para este tramo, guiate por el pronóstico del INA.' : ''}`;
 }
 
 // ================= ALTURAS MEDIDAS (Prefectura) =================
@@ -603,9 +612,9 @@ const ACCENTS = {
 const portName = (p) => ACCENTS[norm(p)] || p.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase())
   .replace(/ (De|Del|La|Las|Los|El)(?= )/g, (w) => w.toLowerCase());
 
-function gaugeSvg(r, hist) {
+function gaugeSvg(r, hist, fc = null) {
   const GW = 600, GH = 66;
-  const vals = [r.height_m, r.alert_m, r.evac_m, ...hist.map((h) => h[1])].filter((v) => v != null);
+  const vals = [r.height_m, r.alert_m, r.evac_m, fc?.hi, ...hist.map((h) => h[1])].filter((v) => v != null);
   const max = Math.max(...vals) * 1.1, min = Math.min(0, ...vals);
   const gx = (v) => ((v - min) / (max - min)) * GW;
   const lv = level(r);
@@ -624,24 +633,46 @@ function gaugeSvg(r, hist) {
     if (v == null) continue;
     svg += `<line x1="${gx(v)}" x2="${gx(v)}" y1="19" y2="39" stroke="var(--ink)" stroke-width="1.5"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
   }
-  const marks = [r.alert_m != null && `┆ alerta ${nf2.format(r.alert_m)}`, r.evac_m != null && `│ evacuación ${nf2.format(r.evac_m)}`].filter(Boolean).join('   ');
+  // pronóstico INA a +7 días: rango (bajo–alto) y valor central, sobre la barra
+  if (fc) {
+    svg += `<line x1="${gx(fc.lo)}" x2="${gx(fc.hi)}" y1="29" y2="29" stroke="var(--ink)" stroke-width="1.5"/>` +
+      `<circle cx="${gx(fc.mid)}" cy="29" r="5.5" fill="var(--fig)" stroke="var(--ink)" stroke-width="2"/>`;
+  }
+  const marks = [fc && `○ INA ${dShort(fc.date)}`, r.alert_m != null && `┆ alerta ${nf2.format(r.alert_m)}`, r.evac_m != null && `│ evacuación ${nf2.format(r.evac_m)}`].filter(Boolean).join('   ');
   if (marks) svg += `<text x="${GW}" y="56" text-anchor="end" font-size="12" fill="var(--ink-2)">${marks}</text>`;
   return svg + '</svg>';
 }
 
+// pronóstico INA de un puerto (si lo hay) y el estado que implicaría cada valor
+const fcOf = (port) => extras.forecastINA?.ports?.find((p) => p.port === norm(port));
+const lvAt = (r, v) => (r.evac_m != null && v >= r.evac_m ? 'evac' : r.alert_m != null && v >= r.alert_m ? 'alerta' : null);
+function fcLine(r, f) {
+  const pts = f.points.filter((p) => p.date > f.points[0].date);
+  if (!pts.length) return '';
+  return `<p class="fc-line"><span class="muted">pronóstico INA (${dShort(f.issued)}):</span> ` +
+    pts.map((p) => `${dShort(p.date)} <b>${nf2.format(p.mid)} m</b> <span class="muted">(${nf2.format(p.lo)}–${nf2.format(p.hi)})</span> ${chip(lvAt(r, p.mid))}`).join(' · ') + '</p>';
+}
+function gaugeRow(r) {
+  const hist = Object.entries(extras.history?.[`${r.river}|${r.port}`] || {}).sort().slice(-30);
+  const v = r.var_m != null ? ` ${r.var_m > 0 ? '+' : r.var_m < 0 ? '−' : '±'}${nf2.format(Math.abs(r.var_m))}` : '';
+  const f = fcOf(r.port), next = f?.points.find((p) => p.date > f.points[0].date);
+  return `<div class="gauge-row" data-port="${r.port}"><div class="gauge-head"><span><b>${portName(r.port)}</b> <span class="muted small">${dShort(r.date)}${r.time ? ' ' + r.time : ''}</span></span>` +
+    `<span>${chip(level(r))} <span class="h">${nf2.format(r.height_m)} m</span> <span class="muted small">${trend(r)}${v}</span></span></div>` +
+    gaugeSvg(r, hist, next || null) + (f ? fcLine(r, f) : '') + '</div>';
+}
 function drawHeights() {
   const box = $('#heights');
   const rs = portsOf(SEL);
   box.hidden = !rs.length;
   if (!rs.length) return;
-  box.innerHTML = `<h3>Altura medida</h3><p class="muted small">Hidrómetros de Prefectura en este tramo. Es la última lectura; no cambia con la fecha elegida arriba. La línea fina son los últimos 30 días.</p>` +
-    rs.map((r) => {
-      const hist = Object.entries(extras.history?.[`${r.river}|${r.port}`] || {}).sort().slice(-30);
-      const v = r.var_m != null ? ` ${r.var_m > 0 ? '+' : r.var_m < 0 ? '−' : '±'}${nf2.format(Math.abs(r.var_m))}` : '';
-      return `<div class="gauge-row" data-port="${r.port}"><div class="gauge-head"><span><b>${portName(r.port)}</b> <span class="muted small">${dShort(r.date)}${r.time ? ' ' + r.time : ''}</span></span>` +
-        `<span>${chip(level(r))} <span class="h">${nf2.format(r.height_m)} m</span> <span class="muted small">${trend(r)}${v}</span></span></div>` +
-        gaugeSvg(r, hist) + '</div>';
-    }).join('');
+  // principal: el que tiene pronóstico del INA o, si no, el más comprometido; el resto, plegado
+  const rank = (r) => (fcOf(r.port) ? 4 : 0) + ({ evac: 2, alerta: 1 }[level(r)] || 0);
+  const sorted = rs.slice().sort((a, b) => rank(b) - rank(a));
+  const [first, ...rest] = sorted;
+  box.innerHTML = `<h3>Altura medida</h3>` +
+    `<details class="help"><summary>cómo leer</summary><p class="muted small">Hidrómetros de Prefectura en este tramo, última lectura (no cambia con la fecha elegida arriba). La línea fina son los últimos 30 días; las rayas, las alturas de alerta (punteada) y evacuación. El círculo es la altura que pronostica el INA para la próxima semana, con su rango.</p></details>` +
+    gaugeRow(first) +
+    (rest.length ? `<details class="more"><summary>${rest.length} ${rest.length === 1 ? 'hidrómetro más' : 'hidrómetros más'} en este tramo</summary>${rest.map(gaugeRow).join('')}</details>` : '');
 }
 
 // ================= SATÉLITE =================
@@ -649,14 +680,15 @@ function drawHeights() {
 // (Acumular días suma artefactos de borde de pasada.)
 let satReq = 0;
 async function drawSat() {
-  const fig = $('#sat');
+  const fig = $('#sat'), box = $('#sat-box');
   const sat = extras.satellite;
-  fig.hidden = !sat;
+  box.hidden = !sat;
   if (!sat) return;
+  // plegado: las imágenes se piden recién al abrirlo
+  if (!box.open) { satReq++; fig.innerHTML = ''; return; }
   const id = SEL, req = ++satReq;
   const attr = [sat.layers?.base?.attribution, sat.layers?.flood?.attribution].filter(Boolean).join(' · ');
-  fig.innerHTML = `<h3>Desde el satélite</h3>` +
-    `<p class="muted small">Unos 50 km alrededor del punto. En rosa, el agua fuera de su lugar habitual que detectó el radar de Sentinel-1 (ve a través de las nubes) en una pasada. Donde no hay rosa puede no haber inundación, o el satélite no cubrió esa zona. El radar a veces confunde suelo muy húmedo o bordes de pasada con agua.</p>` +
+  fig.innerHTML = `<details class="help"><summary>cómo leer</summary><p class="muted small">Unos 50 km alrededor del punto. En rosa, el agua fuera de su lugar habitual que detectó el radar de Sentinel-1 (ve a través de las nubes) en una pasada. Donde no hay rosa puede no haber inundación, o el satélite no cubrió esa zona. El radar a veces confunde suelo muy húmedo o bordes de pasada con agua.</p></details>` +
     `<div class="frame"><img alt="Imagen satelital alrededor de ${byId[id].name}" src="/api/sat/base/${id}.png"></div>` +
     `<figcaption class="small muted"><span id="sat-ctl">buscando pasadas del satélite…</span><span>${attr}</span></figcaption>`;
   let passes = [];
@@ -677,31 +709,40 @@ async function drawSat() {
 }
 
 
+$('#sat-box').addEventListener('toggle', () => { if ($('#sat-box').open) drawSat(); });
+
 // ================= REPRESAS =================
+// Una línea por represa con lo esencial; el detalle y el gráfico, al desplegar
 function drawDams() {
   const dams = Object.entries(extras.dams || {}).filter(([, d]) => d?.series?.length);
   $('#dams-card').hidden = !dams.length;
-  const NAMES = DAM_NAMES;
-  $('#dams').innerHTML = dams.map(([id, d]) => `<div class="dam" id="dam-block-${id}"><h3>${NAMES[id] || id}</h3><p class="muted small">${DAM_SOURCE[id] || ''}</p><div class="stats" id="dam-stats-${id}"></div>` +
-    `<svg class="chart" id="dam-${id}" role="img" aria-label="Caudal erogado por ${NAMES[id] || id}"></svg>` +
-    `<div class="series-key small muted"><span class="key"><span class="sw line" style="background:var(--q)"></span>Erogado (medido)</span>` +
-    `<span class="key"><span class="sw dash" style="border-color:var(--model)"></span>Modelo en ese punto</span></div></div>`).join('');
-  for (const [id, d] of dams) {
+  const sgn = (v) => (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v);
+  const info = dams.map(([id, d]) => {
     const model = byId[DAM_STATION[id]];
-    const byDate = Object.fromEntries(d.series.map((r) => [r.date, r]));
-    const meas = days.map((t) => byDate[t]?.outflow ?? null);
     const valid = d.series.filter((r) => r.outflow != null);
     const last = valid.at(-1);
     const ref = valid.find((r) => r.date >= days[Math.max(0, todayIdx - 30)]);
-    const ch = last && ref ? Math.round((last.outflow / ref.outflow - 1) * 100) : null;
+    const m = model?.q[days.indexOf(last?.date)];
+    return { id, d, model, last, ref, m,
+      ch: last && ref ? Math.round((last.outflow / ref.outflow - 1) * 100) : null,
+      ratio: m && last ? last.outflow / m : null };
+  });
+  $('#dams').innerHTML = info.map(({ id, last, ratio, ch }) =>
+    `<details class="dam fold" id="dam-block-${id}"><summary><b>${DAM_NAMES[id] || id}</b> · ${fmtQ(last?.outflow)} m³/s` +
+    (ratio ? ` · <span class="${ratio > 1.25 ? 'warn' : ''}">×${nf1.format(ratio)} el modelo</span>` : '') +
+    (ch != null ? ` · ${sgn(ch)} % en 30 días` : '') + `</summary>` +
+    `<p class="muted small">${DAM_SOURCE[id] || ''}</p><div class="stats" id="dam-stats-${id}"></div>` +
+    `<svg class="chart" id="dam-${id}" role="img" aria-label="Caudal erogado por ${DAM_NAMES[id] || id}"></svg>` +
+    `<div class="series-key small muted"><span class="key"><span class="sw line" style="background:var(--q)"></span>Erogado (medido)</span>` +
+    `<span class="key"><span class="sw dash" style="border-color:var(--model)"></span>Modelo en ese punto</span></div></details>`).join('');
+  for (const { id, d, model, last, ref, m, ch } of info) {
+    const byDate = Object.fromEntries(d.series.map((r) => [r.date, r]));
+    const meas = days.map((t) => byDate[t]?.outflow ?? null);
+    const r = m && last ? Math.round((last.outflow / m - 1) * 100) : null;
     $(`#dam-stats-${id}`).innerHTML = [
       { k: `Erogado · ${last ? dShort(last.date) : '—'}`, v: fmtQ(last?.outflow), s: last?.spill != null ? `m³/s · ${fmtQ(last.spill)} por vertedero` : 'm³/s medido' },
-      { k: 'En 30 días', v: ch == null ? '—' : `${ch > 0 ? '+' : ch < 0 ? '−' : '±'}${Math.abs(ch)} %`, s: ref ? `desde ${fmtQ(ref.outflow)} m³/s` : '' },
-      (() => {
-        const m = model?.q[days.indexOf(last?.date)];
-        const r = m && last ? Math.round((last.outflow / m - 1) * 100) : null;
-        return { k: 'Frente al modelo', v: r == null ? '—' : `${r > 0 ? '+' : r < 0 ? '−' : '±'}${Math.abs(r)} %`, s: m ? `el modelo estima ${fmtQ(m)}` : '' };
-      })(),
+      { k: 'En 30 días', v: ch == null ? '—' : `${sgn(ch)} %`, s: ref ? `desde ${fmtQ(ref.outflow)} m³/s` : '' },
+      { k: 'Frente al modelo', v: r == null ? '—' : `${sgn(r)} %`, s: m ? `el modelo estima ${fmtQ(m)}` : '' },
     ].map((x) => `<div class="stat"><div class="k">${x.k}</div><div class="v">${x.v}</div><div class="s">${x.s}</div></div>`).join('');
     miniChart($(`#dam-${id}`), [
       { v: model ? model.q.map((q, i) => (i <= todayIdx ? q : null)) : [], stroke: 'var(--model)', dash: '6 3', label: 'Modelo' },
@@ -927,6 +968,7 @@ function goTo(kind, key, station) {
     kind === 'dam' ? document.getElementById(`dam-block-${key}`) :
     $('#detail');
   if (!target) return;
+  for (let d = target.closest('details'); d; d = d.parentElement?.closest('details')) d.open = true;
   target.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   target.classList.remove('flash');
   void target.offsetWidth; // reinicia la animación si se vuelve a elegir el mismo
@@ -949,6 +991,13 @@ function drawKpis() {
     return { id, r: m && last ? last.outflow / m : null };
   }).filter((d) => d.r > 1.25).sort((a, b) => b.r - a.r);
 
+  // pronóstico oficial: puertos que superarían la evacuación (valor central), con la primera fecha
+  const fcEvac = (extras.forecastINA?.ports || []).map((f) => {
+    const r = sys.find((x) => norm(x.port) === f.port);
+    const p = r && f.points.slice(1).find((p) => lvAt(r, p.mid) === 'evac');
+    return p ? { r, date: p.date, over: p.mid - r.evac_m } : null;
+  }).filter(Boolean).sort((a, b) => a.date.localeCompare(b.date) || b.over - a.over);
+
   // ítem: link si hay a dónde llevar; si no, texto
   const item = (label, kind, key, station) => station
     ? `<li><button type="button" class="kpi-link" data-kind="${kind}" data-key="${key}" data-st="${station}">${label}</button></li>`
@@ -961,7 +1010,7 @@ function drawKpis() {
     tile('evac', 'evac', 'Evacuación', evac.map((r) => item(portName(r.port), 'port', r.port, stationOfPort(r)))),
     tile('alerta', 'alerta', 'Alerta', alerta.map((r) => item(portName(r.port), 'port', r.port, stationOfPort(r)))),
     tile('alerta', 'alerta', 'Caudal muy alto', high.map((x) => item(x.s.kind === 'trib' ? `río ${x.s.name}` : x.s.name, 'station', x.s.id, x.s.id))),
-    tile('alerta', 'alerta', 'Represas sobre el modelo', dams.map((d) => item(DAM_NAMES[d.id], 'dam', d.id, DAM_STATION[d.id]))),
+    tile('evac', 'evac', 'Evacuación pronosticada (INA)', fcEvac.map((x) => item(`${portName(x.r.port)} <span class="nw">${dShort(x.date)}</span>`, 'port', x.r.port, stationOfPort(x.r)))),
   ].join('');
   for (const b of document.querySelectorAll('#kpis .kpi-link')) {
     b.addEventListener('click', () => goTo(b.dataset.kind, b.dataset.key, b.dataset.st));

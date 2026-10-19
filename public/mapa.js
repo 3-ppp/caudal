@@ -39,7 +39,10 @@ const [data, extras, ratingsDoc, barrios, geo, srvDoc, munDoc] = await Promise.a
 });
 const rise = createRise({ data, extras, ratings: ratingsDoc.estaciones || {} });
 const days = data.days;
-const byId = rise.byId;
+// las dos escalas del Paraguay (altura medida) no son puntos de caudal del monitor: tienen nombre propio
+const byId = { ...rise.byId, paraguay_formosa: { name: 'Formosa (río Paraguay)' }, paraguay_clorinda: { name: 'Puerto Pilcomayo (río Paraguay)' } };
+const monitorId = (st) => (st.startsWith('paraguay_') ? 'paraguay' : st);
+const obsNote = (st) => (rise.isObs(st) ? '<p class="small muted">Río Paraguay: la estimación usa la altura medida por Prefectura, sin pronóstico; solo hay valor para los días con medición.</p>' : '');
 const TODAY_AR = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 let todayIdx = days.findLastIndex((d) => d <= TODAY_AR);
 if (todayIdx < 0) todayIdx = 0;
@@ -142,7 +145,11 @@ const LAYERS = {
 // ---------- capa vectorial: ríos, puntos de caudal y barrios
 const gRiv = el('g', {}, vec), gPts = el('g', {}, vec), gRut = el('g', {}, vec), gBar = el('g', {}, vec), gHot = el('g', {}, vec), gSrv = el('g', {}, vec), gLab = el('g', {}, vec); // gHot: los barrios afectados, siempre por encima
 const rivPaths = Object.values(geo.stems).map((st) => ({ c: st.c, n: el('path', { class: 'riv' }, gRiv) }));
-const stPts = data.stations.filter((s) => s.kind === 'main').map((s) => ({
+for (const [id, t] of Object.entries(geo.tribs || {})) rivPaths.push({ c: t.c, n: el('path', { class: id === 'pilcomayo' ? 'riv obs' : 'riv' }, gRiv) });
+// estaciones de altura del INA con ubicación propia (Bermejo y Pilcomayo): puntos con su lectura de hoy
+const GAUGES = (extras.heights?.stations ?? []).filter((r) => r.lat != null && r.lon != null && r.height_m != null);
+const gdNodes = GAUGES.map((r, i) => el('circle', { class: 'gd', r: 4.5, 'data-i': i }, gPts));
+const stPts = data.stations.filter((s) => s.kind === 'main' || s.id === 'bermejo' || s.id === 'paraguay').map((s) => ({
   s, dot: el('circle', { class: 'st-pt', r: 3.5 }, gPts), txt: el('text', { dy: -7, 'text-anchor': 'middle' }, gPts),
 }));
 for (const p of stPts) p.txt.textContent = p.s.name;
@@ -176,6 +183,11 @@ function renderVec() {
   gPts.style.display = on ? '' : 'none';
   if (on) {
     for (const r of rivPaths) r.n.setAttribute('d', r.c.map((p, i) => `${i ? 'L' : 'M'}${sx(p[0], s).toFixed(1)},${sy(p[1], s).toFixed(1)}`).join(''));
+    GAUGES.forEach((r, i) => {
+      const x = sx(r.lon, s), y = sy(r.lat, s), vis = x > -10 && x < W + 10 && y > -10 && y < H + 10;
+      gdNodes[i].style.display = vis ? '' : 'none';
+      if (vis) { gdNodes[i].setAttribute('cx', x.toFixed(1)); gdNodes[i].setAttribute('cy', y.toFixed(1)); }
+    });
     for (const p of stPts) {
       const x = sx(p.s.lon, s), y = sy(p.s.lat, s), vis = x > -60 && x < W + 60 && y > -20 && y < H + 20;
       p.dot.style.display = p.txt.style.display = vis ? '' : 'none';
@@ -226,24 +238,9 @@ function renderVec() {
 // ---------- estado oficial de las rutas nacionales (Vialidad Nacional)
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const cuando = (iso) => (iso ? new Date(iso).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).replace('.', '') : '');
-function oficialHtml() {
-  if (!EST) return '';
-  const al = EST.alertas.filter((a) => a.zona);
-  const li = (a) => {
-    const k = RUT.index(a), txt = `RN ${esc(a.ruta)} · ${esc(a.prov)} · ${esc(a.tramo)}: <b>${TXT[a.estado] || esc(a.estado.toLowerCase())}</b>`;
-    return `<li><span class="rt-ico ${CLS[a.estado] || 'restr'}"></span>` +
-      (k >= 0 ? `<button type="button" class="lnk" data-rt="${k}">${txt}</button>` : `<span>${txt} <span class="muted">(sin ubicar en el mapa)</span></span>`) + `</li>`;
-  };
-  return `<p class="rut-of"><b>Estado oficial</b> · Vialidad Nacional <span class="muted">· ${cuando(EST.updated)}</span></p>` +
-    (al.length ? `<ul class="bar-keys">${al.map(li).join('')}</ul>` : '<p class="muted small">Sin cortes ni restricciones en las rutas nacionales de la zona.</p>') +
-    `<details class="help"><summary class="muted small">cómo leerlo</summary><p class="muted small">Lo informa Vialidad Nacional, no lo estimamos nosotros. La planilla nombra los tramos por localidades y no trae geometría: la ubicación en el mapa es aproximada y la restricción puede afectar solo una parte del tramo. Solo rutas nacionales: las provinciales las informa cada provincia. Fuente: <a href="${EST.url}" target="_blank" rel="noopener">estado de rutas</a> (argentina.gob.ar, CC BY 4.0).</p></details>`;
-}
-
-// ---------- estados por fecha y resumen
 function drawRutasSum() {
   if (!EST) return;
-  $('#rut-sum').innerHTML = oficialHtml();
-  $('#rut-sum').querySelectorAll('[data-rt]').forEach((b) => b.addEventListener('click', () => { const k = +b.dataset.rt, bb = RUT.bbox(k); flyToBox(bb, 0.5); selectRoad(k); }));
+  $('#rut-sum').innerHTML = `<p class="legend-line small muted"><span class="rt-ico total"></span> corte total <span class="rt-ico parcial"></span> parcial <span class="rt-ico restr"></span> restringida<br>Vialidad Nacional · ${cuando(EST.updated)} · pasá el cursor sobre una ruta</p>`;
 }
 function updateStates() {
   const c = { wet: [0, 0], near: [0, 0], dry: [0, 0], na: [0, 0] };
@@ -262,15 +259,10 @@ function updateStates() {
     `<li><span class="bar-ico near"></span><span><b>${fm(c.near[1])}</b> familias en <b>${fm(c.near[0])}</b> barrios con inundación posible</span></li>` +
     `<li><span class="bar-ico"></span><span>${fm(c.dry[0])} barrios con inundación poco probable</span></li>` +
     `<li><span class="bar-ico na"></span><span class="muted">${fm(c.na[0])} sin estimación</span></li></ul>` +
-    `<details class="help"><summary class="muted small">cómo se estima</summary><p class="muted small">Estimación, no un aviso oficial. La altura de cada barrio sobre el río sale del terreno (SRTM, 30 m) y puede errar varios metros. La subida del río, del caudal del modelo GloFAS o del pronóstico del INA donde lo hay, respecto de su nivel mediano. No cuenta defensas, desagües ni lluvia local. Sin estimación: Paraná arriba de Yacyretá (depende de las represas) y el Delta (marea).</p></details>`;
+    `<details class="help"><summary class="muted small">cómo se estima</summary><p class="muted small">Estimación, no un aviso oficial. La altura de cada barrio sobre el río sale del terreno (SRTM, 30 m) y puede errar varios metros. La subida del río, del caudal del modelo GloFAS o del pronóstico del INA donde lo hay, respecto de su nivel mediano. No cuenta defensas, desagües ni lluvia local. Sin estimación: Paraná arriba de Yacyretá (depende de las represas), el Delta (marea), el Pilcomayo (cauce cambiante) y el Bermejo aguas arriba de Puerto Lavalle (río de piedemonte). El Paraguay se estima con la altura medida por Prefectura, sin pronóstico (solo hasta hoy); el Bermejo bajo, con el modelo de caudal.</p></details>`;
   if (SRV) {
-    const r = SRV.update(T), pl = (n, a, b) => `<b>${nf.format(n)}</b> ${n === 1 ? a : b}`;
-    const line = (k, cls, txt) => `<li><span class="bar-ico ${cls}"></span><span>${pl(r.c.e[k], 'escuela', 'escuelas')} y ${pl(r.c.s[k], 'centro de salud', 'centros de salud')} ${txt}</span></li>`;
-    const names = r.wet.slice(0, 6).map((i) => `<li><button type="button" class="lnk" data-sv="${i}">${esc(SRV.items[i].n)}</button></li>`).join('');
-    $('#srv-sum').innerHTML = `<ul class="bar-keys">${line('wet', 'wet', 'con inundación probable')}${line('near', 'near', 'con inundación posible')}</ul>` +
-      (names ? `<ul class="sv-names small">${names}${r.wet.length > 6 ? `<li class="muted">y ${r.wet.length - 6} más</li>` : ''}</ul>` : '') +
-      `<details class="help"><summary class="muted small">cómo leerlo</summary><p class="muted small">Puntos del IGN: escuelas (Mapa Educativo Nacional) y centros de salud (SISA, Ministerio de Salud) a menos de ${srvDoc.maxKm} km de los ríos. Se ven al acercar el mapa. Misma estimación que los barrios: altura del terreno contra subida del río, sin defensas ni desagües. Es una estimación, no un aviso oficial; para saber si un establecimiento funciona, consultá a su autoridad.</p></details>`;
-    $('#srv-sum').querySelectorAll('[data-sv]').forEach((b) => b.addEventListener('click', () => { const i = +b.dataset.sv; flyTo({ lon: SRV.items[i].c[0], lat: SRV.items[i].c[1], z: 14.5 }); selectSrv(i); }));
+    SRV.update(T);
+    $('#srv-sum').innerHTML = '<p class="legend-line small muted"><span class="bar-ico wet"></span> probable <span class="bar-ico near"></span> posible · pasá el cursor sobre cada uno</p>';
   }
   if (selected >= 0) drawCard();
   if (selSrv >= 0) drawSrvCard();
@@ -319,9 +311,9 @@ function drawCard() {
     `<dt>Estado</dt><dd class="st ${st}">${WORD[st]}</dd></dl>` +
     `<div class="muted small">según el modelo, jun → nov</div>${strip}` +
     `<p class="small">${first != null ? `Según el modelo, el primer día con inundación probable desde hoy es el <b>${dShort(days[first])}</b>.` : st === 'na' ? 'Sin estimación para este tramo del río.' : 'El modelo no prevé inundación en este barrio durante el período del pronóstico.'}</p>` +
-    muniHtml(b) +
+    muniHtml(b) + obsNote(b.st) +
     `<p class="small muted">Estimación a partir de un modelo de elevación; no es un aviso oficial.</p>` +
-    (sta ? `<p class="small"><a href="./#${b.st}">ver ${sta.name} en el monitor →</a></p>` : '');
+    (sta ? `<p class="small"><a href="./#${monitorId(b.st)}">ver ${sta.name} en el monitor →</a></p>` : '');
   card.hidden = false;
   $('#card-x').addEventListener('click', () => select(-1));
 }
@@ -364,8 +356,9 @@ function drawSrvCard() {
     `<dt>Estado</dt><dd class="st ${st}">${WORD[st]}</dd></dl>` +
     `<div class="muted small">según el modelo, jun → nov</div>${stripSvg(cells)}` +
     `<p class="small">${first != null ? `Según el modelo, el primer día con inundación probable desde hoy es el <b>${dShort(days[first])}</b>.` : st === 'na' ? 'Sin estimación para este tramo del río.' : 'El modelo no prevé inundación en este lugar durante el período del pronóstico.'}</p>` +
+    obsNote(it.st) +
     `<p class="small muted">Estimación a partir de un modelo de elevación; no es un aviso oficial. Ubicación según el IGN (${it.t === 'e' ? 'Mapa Educativo Nacional' : 'SISA, Ministerio de Salud'}).</p>` +
-    (sta ? `<p class="small"><a href="./#${it.st}">ver ${sta.name} en el monitor →</a></p>` : '');
+    (sta ? `<p class="small"><a href="./#${monitorId(it.st)}">ver ${sta.name} en el monitor →</a></p>` : '');
   card.hidden = false;
   $('#card-x').addEventListener('click', () => selectSrv(-1));
 }
@@ -403,6 +396,8 @@ vec.addEventListener('mousemove', (ev) => {
   let html = g ? tipOf(BAR[+g.dataset.i]) : null;
   const sv = !g && SRV ? ev.target.closest?.('.sv') : null;
   if (sv) html = tipSrv(+sv.dataset.i);
+  const gd = !g && !sv ? ev.target.closest?.('.gd') : null;
+  if (gd) html = tipGauge(+gd.dataset.i);
   if (!html && RUT && $('#c-rut').checked) {
     const rc = view.getBoundingClientRect(), s = scale();
     const ri = RUT.hit(ev.clientX - rc.left, ev.clientY - rc.top, { X: (lon) => sx(lon, s), Y: (lat) => sy(lat, s) });
@@ -416,6 +411,12 @@ vec.addEventListener('mousemove', (ev) => {
   if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - 14;
   tip.style.left = x + 'px'; tip.style.top = y + 'px';
 });
+const titulo = (t) => t.toLowerCase().replace(/(^|\s)\S/g, (m) => m.toUpperCase());
+function tipGauge(i) {
+  const r = GAUGES[i];
+  return `<b>${titulo(r.river)} · ${titulo(r.port)}</b><br>Altura <b>${nf1.format(r.height_m)} m</b>${r.state ? ' · ' + r.state.toLowerCase() : ''}<br>` +
+    `<span class="muted">${r.date}${r.time ? ' ' + r.time : ''} · medición del INA, sin nivel de alerta</span>`;
+}
 function tipSrv(i) {
   const it = SRV.items[i], st = SRV.state(i, T);
   return `<b>${esc(it.n)}</b><br><span class="muted">${esc(it.g)}</span><br>` +
@@ -425,7 +426,12 @@ function tipSrv(i) {
 function tipRoad(ri) {
   const a = RUT.info(ri);
   return `<b>RN ${esc(a.ruta)}</b> <span class="muted">· ${esc(a.prov)}</span><br>${esc(a.tramo)}<br>` +
-    `<div class="row"><span>Estado oficial</span><span>${TXT[a.estado] || esc(a.estado.toLowerCase())}</span></div>`;
+    `<div class="row"><span>Estado oficial</span><span><b>${TXT[a.estado] || esc(a.estado.toLowerCase())}</b></span></div>` +
+    `<div class="row"><span>Calzada</span><span>${esc(a.calzada.toLowerCase() || '—')}</span></div>` +
+    `<div class="row"><span>Largo del tramo</span><span>${a.km != null ? '~' + nf.format(a.km) + ' km' : '—'}</span></div>` +
+    `<div class="row"><span>Actualizado</span><span>${esc(a.act)}</span></div>` +
+    (a.obs ? `<div class="small" style="margin-top:4px;max-width:320px">${esc(a.obs.slice(0, 260))}${a.obs.length > 260 ? '…' : ''}</div>` : '') +
+    `<div class="muted small" style="margin-top:3px">Lo informa Vialidad Nacional; ubicación aproximada.</div>`;
 }
 vec.addEventListener('mouseleave', () => { tip.hidden = true; });
 

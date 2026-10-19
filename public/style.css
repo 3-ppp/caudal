@@ -437,3 +437,7 @@ details.dam .warn { color: var(--st-critical); font-weight: 600; }
 @keyframes flow { to { stroke-dashoffset: calc(-22 / var(--k, 1)); } }
 @media (prefers-reduced-motion: reduce) { #map.flowing .flow { display: none; } }
 
+/* ríos con altura medida y sin caudal modelado (Pilcomayo) y estaciones del INA */
+.river-obs { stroke: var(--ink-3); stroke-dasharray: calc(6px / var(--k, 1)) calc(5px / var(--k, 1)); stroke-opacity: 0.7; }
+.gauge-dot { fill: var(--fig); stroke: var(--ink-2); stroke-width: calc(1.5px / var(--k, 1)); cursor: default; }
+#map.sat-on .river-obs { stroke: #fff; }

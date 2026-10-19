@@ -203,6 +203,17 @@
       "r": 0.1,
       "glat": -26.875,
       "glon": -58.425
+    },
+    {
+      "id": "bermejo",
+      "name": "Bermejo",
+      "sub": "El Colorado · llega por el Paraguay",
+      "joins": "itati",
+      "lat": -26.31,
+      "lon": -59.37,
+      "r": 0.1,
+      "glat": -26.325,
+      "glon": -59.375
     }
   ],
   "uruguay": [

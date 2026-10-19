@@ -45,7 +45,8 @@ const riverOf = (st) => st.river || 'parana';
 const RIV = Object.fromEntries(Object.keys(RIVER_NAMES).map((r) => [r, main.filter((s) => riverOf(s) === r)]));
 let PR = 'parana'; // río del perfil
 const byId = Object.fromEntries(data.stations.map((s) => [s.id, s]));
-for (const t of tribs) t.km = byId[t.joins].km + 25; // desembocan apenas aguas abajo del punto de referencia
+const TRIB_KM = { bermejo: -45 }; // desfase respecto de los 25 km por defecto, para que sus marcas no se pisen
+for (const t of tribs) t.km = byId[t.joins].km + 25 + (TRIB_KM[t.id] ?? 0); // desembocan apenas aguas abajo del punto de referencia
 
 // ---------- anomalía: 0 = mediana para la fecha, ±1 = percentil 90 / 10
 function score(st, t) {
@@ -184,7 +185,7 @@ for (const l of geo.lakes) el('path', { d: pathOf(l.c) + 'Z', class: 'net', fill
 
 // Nombres de los ríos de la cuenca: ubicados a mano
 const RIV_LABELS = [
-  ['Paraguay', -57.95, -24.6], ['Iguazú', -53.55, -25.8], ['Uruguay', -54.7, -28.1], ['Paranaíba', -49.6, -19.0],
+  ['Paraguay', -57.95, -24.6], ['Pilcomayo', -61.0, -23.6], ['Iguazú', -53.55, -25.8], ['Uruguay', -54.7, -28.1], ['Paranaíba', -49.6, -19.0],
   ['Grande', -47.9, -20.55], ['Tietê', -49.6, -21.75], ['Paranapanema', -50.9, -23.1], ['Bermejo', -60.6, -25.55],
   ['Salado', -61.6, -30.2], ['Río de la Plata', -57.4, -34.75],
 ];
@@ -215,6 +216,12 @@ function atKm(k, t, list = RIV.parana) {
 
 // Afluentes con dato propio
 const pyPaths = geo.paraguay.map((l) => el('path', { d: pathOf(l), fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, gRiver));
+// Bermejo: caudal modelado (el modelo lo sigue bien: correlación 0,9 con las alturas del INA).
+// Pilcomayo: sin caudal modelado (el modelo no lo sigue: su cauce cambia y se pierde en los esteros);
+// se dibuja en trazo punteado y se muestran las alturas medidas por el INA.
+const bermejo = byId.bermejo;
+const brPaths = bermejo ? (geo.bermejo || []).map((l) => el('path', { d: pathOf(l), fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, gRiver)) : [];
+const pcPaths = (geo.pilcomayo || []).map((l) => { const p = el('path', { d: pathOf(l), class: 'river-obs', fill: 'none', 'stroke-width': 2.4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, gRiver); scaled.push([p, 'stroke-width', 2.4]); return p; });
 const igz = byId.iguazu;
 const igzMouth = ms.c.reduce((best, p) => (Math.hypot(p[0] + 54.59, p[1] + 25.59) < Math.hypot(best[0] + 54.59, best[1] + 25.59) ? p : best));
 const igzPath = el('path', { d: pathOf([[igz.lon, igz.lat], igzMouth]), fill: 'none', 'stroke-linecap': 'round' }, gRiver);
@@ -256,6 +263,7 @@ const SHORES = {
   colon: [['Colón', R, 6, 'start', null, [L, 6, 'end']], ['Paysandú', R, 24, 'start', null, [R, 6, 'start']]],
   fraybentos: [['Gualeguaychú', R, 6, 'start', null, [L, 6, 'end']], ['Fray Bentos', R, 24, 'start', null, [R, 6, 'start']]],
   nuevapalmira: [['Nueva Palmira', R, 10, 'start']],
+  bermejo: [['El Colorado', L, 6, 'end', 'minor']],
 };
 const dots = {};
 for (const st of data.stations) {
@@ -280,6 +288,16 @@ for (const st of data.stations) {
   g.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); select(st.id); } });
   dots[st.id] = { c, texts, ring };
 }
+// estaciones de altura del INA con ubicación propia (Bermejo y Pilcomayo): puntos chicos con su lectura de hoy
+const title = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (m) => m.toUpperCase());
+for (const r of extras.heights?.stations ?? []) {
+  if (r.lat == null || r.lon == null || r.height_m == null) continue;
+  const [gx, gy] = P([r.lon, r.lat]);
+  const c = el('circle', { cx: gx, cy: gy, r: 4, class: 'gauge-dot' }, gDots);
+  scaled.push([c, 'r', 4]);
+  c.addEventListener('mousemove', (ev) => showTip(`<b>${title(r.river)} · ${title(r.port)}</b><br>Altura <b>${nf1.format(r.height_m)} m</b>${r.state ? ' · ' + r.state.toLowerCase() : ''}<br><span class="muted">${r.date}${r.time ? ' ' + r.time : ''} · medición del INA, sin nivel de alerta</span>`, ev));
+  c.addEventListener('mouseleave', hideTip);
+}
 
 function drawMap() {
   for (const s of segs) {
@@ -290,6 +308,7 @@ function drawMap() {
   }
   const py = byId.paraguay;
   for (const p of pyPaths) { p.setAttribute('stroke', color(score(py, T))); p.setAttribute('stroke-width', (WQ(py.q[T]) / K).toFixed(2)); }
+  if (bermejo) for (const p of brPaths) { p.setAttribute('stroke', color(score(bermejo, T))); p.setAttribute('stroke-width', (WQ(bermejo.q[T]) / K).toFixed(2)); }
   igzPath.setAttribute('stroke', color(score(igz, T)));
   igzPath.setAttribute('stroke-width', (WQ(igz.q[T]) / K).toFixed(2));
   for (const [id, d] of Object.entries(dots)) {
@@ -368,9 +387,12 @@ const pBand = el('path', { fill: 'var(--band)' }, prof);
 const pMed = el('path', { fill: 'none', stroke: 'var(--median)', 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }, prof);
 // afluentes: marca en el km de su desembocadura
 const pTrib = el('g', {}, prof);
+const tribPlaced = [];
 for (const t of tribs) {
+  const row = tribPlaced.filter((k) => Math.abs(k - t.km) < 180).length;
+  tribPlaced.push(t.km);
   el('line', { x1: px(t.km), x2: px(t.km), y1: PM.t, y2: PH - PM.b, stroke: 'var(--rule)', 'stroke-dasharray': '2 3' }, pTrib);
-  el('text', { x: px(t.km) + 4, y: PM.t + 10, class: 'axis', fill: 'var(--ink-3)', 'font-size': 11 }, pTrib).textContent = `+ ${t.name}`;
+  el('text', { x: px(t.km) + 4, y: PM.t + 10 + 12 * row, class: 'axis', fill: 'var(--ink-3)', 'font-size': 11 }, pTrib).textContent = `+ ${t.name}`;
 }
 const pLine = el('path', { fill: 'none', stroke: 'var(--q)', 'stroke-width': 2, 'stroke-linejoin': 'round' }, prof);
 const pCross = el('line', { y1: PM.t, y2: PH - PM.b, stroke: 'var(--ink-3)', 'stroke-width': 1, visibility: 'hidden' }, prof);
@@ -588,7 +610,7 @@ const PORTS = {
   bellavista: ['BELLA VISTA'], goya: ['GOYA', 'RECONQUISTA'], lapaz: ['ESQUINA', 'LA PAZ', 'SANTA ELENA'],
   santafe: ['HERNANDARIAS', 'SANTA FE', 'PARANA'], diamante: ['DIAMANTE'], rosario: ['SAN LORENZO', 'ROSARIO', 'VICTORIA'],
   sannicolas: ['VILLA CONSTITUCION', 'SAN NICOLAS'], sanpedro: ['RAMALLO', 'SAN PEDRO'],
-  delta: ['BARADERO', 'ZARATE', 'CAMPANA'], paraguay: ['FORMOSA', 'PILAR'], iguazu: ['IGUAZU', 'PUERTO IGUAZU'],
+  delta: ['BARADERO', 'ZARATE', 'CAMPANA'], paraguay: ['PILCOMAYO', 'PUERTO PILCOMAYO', 'BOUVIER', 'FORMOSA', 'BERMEJO', 'LAS PALMAS', 'ISLA DEL CERRITO'], bermejo: ['PUERTO LAVALLE', 'EL COLORADO', 'PUERTO VELAZ'], iguazu: ['IGUAZU', 'PUERTO IGUAZU'],
   // río Uruguay
   elsoberbio: ['EL SOBERBIO', 'ALBA POSSE', 'PANAMBI', 'SAN JAVIER'],
   santotome: ['PUERTO CONCEPCION', 'GARRUCHOS', 'SANTO TOME', 'ALVEAR', 'LA CRUZ'],

@@ -22,7 +22,8 @@
   ],
   "tributaries": [
     { "id": "iguazu",   "name": "Iguazú",   "sub": "llega antes de Posadas",  "joins": "itaipu",  "lat": -25.68, "lon": -54.44, "r": 0.05 },
-    { "id": "paraguay", "name": "Paraguay", "sub": "llega antes de Corrientes", "joins": "itati",  "lat": -26.86, "lon": -58.30, "r": 0.10 }
+    { "id": "paraguay", "name": "Paraguay", "sub": "llega antes de Corrientes", "joins": "itati",  "lat": -26.86, "lon": -58.30, "r": 0.10 },
+    { "id": "bermejo",  "name": "Bermejo",  "sub": "El Colorado · llega por el Paraguay", "joins": "itati", "lat": -26.31, "lon": -59.37, "r": 0.10 }
   ],
   "uruguay": [
     { "id": "marcelino",    "name": "Marcelino Ramos",    "sub": "Alto Uruguay",          "lat": -27.46, "lon": -51.90, "r": 0.10 },

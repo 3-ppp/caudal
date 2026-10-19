@@ -171,7 +171,7 @@ async function optionalImport(name) {
 
 // Serie histórica propia de alturas (una lectura por día y puerto). La primera vez se completa
 // con el histórico de 30 días de la fuente (histFn); después se suma cada lectura nueva.
-const HEIGHT_RIVERS = /PARANA|PARAGUAY|IGUAZU|URUGUAY/;
+const HEIGHT_RIVERS = /PARANA|PARAGUAY|IGUAZU|URUGUAY|BERMEJO|PILCOMAYO/;
 async function appendHeightHistory(pref, histFn) {
   const file = path.join(DATA, 'heights-history.json');
   let h = {};
@@ -257,6 +257,18 @@ async function refreshExtras() {
         delete out.errors.prefectura; // hay alturas: el respaldo cubrió la falla
         out.notes = { alturas: 'Prefectura no responde desde este servidor; alturas vía INA' };
       } catch (e) { out.errors.ina = e.message; }
+    }
+  }
+  // Bermejo y Pilcomayo (red de telemetría del INA): se suman a las alturas, venga de donde venga la principal
+  if (out.heights) {
+    const inaX = await optionalImport('heights-ina');
+    if (inaX?.fetchHeightsINAExtra) {
+      try {
+        const extra = await inaX.fetchHeightsINAExtra();
+        const have = new Set(out.heights.stations.map((s) => `${s.river}|${s.port}`));
+        out.heights.stations.push(...extra.filter((s) => !have.has(`${s.river}|${s.port}`)));
+        out.history = await appendHeightHistory({ stations: extra }, (s) => inaX.fetchHeightsINAHistory(s.port, 30));
+      } catch (e) { out.errors.ina_extra = e.message; }
     }
   }
   const dams = await optionalImport('dams');

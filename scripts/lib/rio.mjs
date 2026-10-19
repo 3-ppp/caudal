@@ -43,19 +43,35 @@ export async function createRio() {
   const geo = JSON.parse(await readFile(root('public/geo.json'), 'utf8'));
   const st = JSON.parse(await readFile(root('stations.json'), 'utf8'));
 
-  // ríos: vértices con su km desde el nacimiento
+  // ríos: vértices con su km desde el nacimiento. Además del Paraná y el Uruguay, los afluentes con punto de caudal
+  // propio (Bermejo, Paraguay). Se descartan los últimos TRIB_MOUTH_KM de cada afluente: ahí el río es el Paraná y un
+  // barrio de Corrientes o Resistencia no debe pasar a otro río por quedar cerca de la desembocadura.
+  const TRIB_MOUTH_KM = 40;
+  // tramo del afluente donde vale la curva altura–caudal de su estación: el Bermejo, desde Puerto Lavalle (km 730) hacia
+  // abajo; aguas arriba (Embarcación, Orán, Aguas Blancas) es un río de piedemonte con crecidas torrenciales
+  const TRIB_FROM_KM = { bermejo: 670 };
+  const stems = { ...geo.stems };
+  for (const id of ['paraguay', 'bermejo']) {
+    const t = geo.tribs?.[id];
+    if (!t) continue;
+    const end = t.km.at(-1) - TRIB_MOUTH_KM, n = t.km.filter((k) => k <= end).length;
+    const n0 = Math.max(0, t.km.findIndex((k) => k >= (TRIB_FROM_KM[id] ?? 0)));
+    stems[id] = { c: t.c.slice(n0, n), km: t.km.slice(n0, n) };
+  }
   const river = [];
-  for (const [name, s] of Object.entries(geo.stems)) s.c.forEach((c, i) => river.push({ river: name, c, km: s.km[i], i }));
+  for (const [name, s] of Object.entries(stems)) s.c.forEach((c, i) => river.push({ river: name, c, km: s.km[i], i }));
   const stations = [
     ...st.main.map((s) => ({ id: s.id, river: 'parana', km: geo.stationKm[s.id] })),
     ...st.uruguay.map((s) => ({ id: s.id, river: 'uruguay', km: geo.stationKm[s.id] })),
+    ...['bermejo', 'paraguay_formosa', 'paraguay_clorinda'].filter((id) => geo.stationKm[id] != null && stems[id.split('_')[0]])
+      .map((id) => ({ id, river: id.split('_')[0], km: geo.stationKm[id] })),
   ].filter((s) => s.km != null);
 
   // punto más cercano de la poligonal (por segmentos, no solo por vértices)
   function nearestRiver(p) {
     let best = { d: Infinity };
-    for (const name of Object.keys(geo.stems)) {
-      const L = geo.stems[name].c, K = geo.stems[name].km;
+    for (const name of Object.keys(stems)) {
+      const L = stems[name].c, K = stems[name].km;
       for (let i = 0; i < L.length - 1; i++) {
         const [x0, y0] = L[i], [x1, y1] = L[i + 1];
         const dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy || 1e-12;
@@ -101,7 +117,7 @@ export async function createRio() {
   const rEl = await elevations(river.map((v) => v.c));
   river.forEach((v, k) => (v.e = rEl[k]));
   const byRiver = {};
-  for (const name of Object.keys(geo.stems)) {
+  for (const name of Object.keys(stems)) {
     const vs = river.filter((v) => v.river === name);
     vs.forEach((v, k) => { v.ref = Math.min(...vs.slice(Math.max(0, k - 2), k + 3).map((w) => w.e)); });
     byRiver[name] = vs;

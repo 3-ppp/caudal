@@ -2,11 +2,12 @@
 // multiplica el caudal (pendiente b de h = a + b·ln Q) y su caudal mediano de referencia.
 // Se ajusta con años de alturas diarias (escalas de Prefectura vía INA) contra el caudal GloFAS en la
 // misma estación. La capa de barrios lo usa para convertir caudal en subida del río.
-//   node scripts/build-ratings.mjs [años=3]
+//   node scripts/build-ratings.mjs [años=3] [estaciones]   (p. ej. `node scripts/build-ratings.mjs 3 bermejo`: solo esas, el resto se conserva)
 import { writeFile, readFile } from 'node:fs/promises';
 import { fetchHeightsINAHistory } from '../sources/heights-ina.mjs';
 
 const YEARS = +process.argv[2] || 3;
+const ONLY = process.argv[3] ? process.argv[3].split(',') : null;
 const ROOT = new URL('..', import.meta.url);
 const API = 'https://flood-api.open-meteo.com/v1/flood';
 const MIN_PTS = 150, MIN_R = 0.8;
@@ -23,10 +24,13 @@ const PORTS = {
   pasolibres: ['YAPEYU', 'PASO DE LOS LIBRES', 'BOMPLAND'], montecaseros: ['MONTE CASEROS', 'MOCORETA'],
   concordia: ['SALTO GRANDE ABAJO', 'CONCORDIA'], colon: ['COLON', 'CONCEPCION DEL URUGUAY'],
   fraybentos: ['CAMPICHUELO'], nuevapalmira: ['PARANACITO'],
+  // Bermejo: el modelo lo sigue bien (r ≈ 0,9 contra las alturas del INA). El Paraguay y el Pilcomayo no se ajustan: el
+  // modelo no los sigue (humedales, remanso, cauce cambiante).
+  bermejo: ['EL COLORADO (SERIE LARGA)', 'SAUZALITO (SERIE LARGA)', 'PUERTO LAVALLE'],
 };
 
 const cal = JSON.parse(await readFile(new URL('data/stations.calibrated.json', ROOT), 'utf8'));
-const stations = Object.fromEntries([...cal.main, ...cal.uruguay].map((s) => [s.id, s]));
+const stations = Object.fromEntries([...cal.main, ...cal.uruguay, ...cal.tributaries].map((s) => [s.id, s]));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ymd = (ms) => new Date(ms).toISOString().slice(0, 10);
 
@@ -55,6 +59,7 @@ const median = (v) => { const s = [...v].sort((a, b) => a - b); return s[Math.fl
 
 const out = {};
 for (const [id, ports] of Object.entries(PORTS)) {
+  if (ONLY && !ONLY.includes(id)) continue;
   const st = stations[id];
   if (!st) continue;
   const q = await flows(st);
@@ -72,6 +77,20 @@ for (const [id, ports] of Object.entries(PORTS)) {
   out[id] = { b: +median(fits.map((f) => f.b)).toFixed(2), qref: Math.round(median(qs)), r: +median(fits.map((f) => f.r)).toFixed(2), ports: fits.map((f) => f.port) };
   console.log(id.padEnd(13), `b=${out[id].b}  r=${out[id].r}  Qmediano=${out[id].qref}  (${fits.map((f) => `${f.port} n=${f.n}`).join(', ')})`);
   await sleep(1500);
+}
+// Paraguay: sin curva altura–caudal (el modelo de caudal no lo sigue en Formosa y Clorinda). La subida de cada día se
+// toma de la altura medida en la escala de Prefectura menos su mediana de los últimos años.
+const OBS = { paraguay_formosa: 'FORMOSA', paraguay_clorinda: 'PUERTO PILCOMAYO' };
+for (const [id, port] of Object.entries(OBS)) {
+  if (ONLY && !ONLY.includes(id)) continue;
+  const hist = await fetchHeightsINAHistory(port, YEARS * 365);
+  const v = hist.map((x) => x.height_m).filter((x) => x != null);
+  if (v.length < MIN_PTS) { console.log(id.padEnd(13), 'sin historia suficiente'); continue; }
+  out[id] = { obs: true, port, river: 'PARAGUAY', hmed: +median(v).toFixed(2), n: v.length };
+  console.log(id.padEnd(13), `altura mediana ${out[id].hmed} m (${port}, n=${v.length})`);
+}
+if (ONLY) { // se conservan las curvas de las demás estaciones
+  try { Object.assign(out, { ...JSON.parse(await readFile(new URL('public/ratings.json', ROOT), 'utf8')).estaciones, ...out }); } catch {}
 }
 await writeFile(new URL('public/ratings.json', ROOT), JSON.stringify({
   generado: ymd(Date.now()), anios: YEARS,

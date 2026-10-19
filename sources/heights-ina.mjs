@@ -83,11 +83,26 @@ export const SERIES = {
   'PARANACITO': { id: 43, river: 'URUGUAY' }, // Villa Paranacito (Delta entrerriano)
   // PARAGUAY (tramo argentino)
   'FORMOSA': { id: 57, river: 'PARAGUAY' },
+  'ISLA DEL CERRITO': { id: 59, river: 'PARAGUAY' },
   'PUERTO PILCOMAYO': { id: 55, river: 'PARAGUAY' },
   'BERMEJO': { id: 58, river: 'PARAGUAY' },
   // IGUAZU
   'IGUAZU': { id: 8, river: 'IGUAZU' }, // Andresito (río Iguazú)
   'PUERTO IGUAZU': { id: 9, river: 'IGUAZU' },
+};
+// Bermejo y Pilcomayo: no están en la red de Prefectura. Son series de la red de telemetría del INA ("sat2", altura
+// hidrométrica, lectura de varias veces por día): `id` es el de la SERIE, no el de la estación. Sin niveles de alerta.
+// lat/lon: ubicación de la estación, para dibujarla donde el río no tiene punto de caudal.
+export const EXTRA = {
+  'EL COLORADO': { id: 6697, river: 'BERMEJO', lat: -26.3342, lon: -59.3625 },
+  'PUERTO LAVALLE': { id: 6917, river: 'BERMEJO', lat: -25.6511, lon: -60.1281 },
+  'PUERTO VELAZ': { id: 6918, river: 'BERMEJO', lat: -26.6606, lon: -58.6339 },
+  'MISION LA PAZ': { id: 32025, river: 'PILCOMAYO', lat: -22.3775, lon: -62.5236 },
+  'PUESTO JEREZ': { id: 9198, river: 'PILCOMAYO', lat: -22.7281, lon: -62.2133 },
+  'VILLA GRAL GUEMES': { id: 33396, river: 'PILCOMAYO', lat: -24.7469, lon: -59.4997 },
+  // series largas (red histórica "bdhi", 2001–2026 y 2019–2024): no tienen lectura diaria al día, sirven para ajustar la curva altura–caudal
+  'EL COLORADO (SERIE LARGA)': { id: 6521, river: 'BERMEJO' },
+  'SAUZALITO (SERIE LARGA)': { id: 29393, river: 'BERMEJO' },
 };
 // No existen en INA (sin escala en alturas_prefe): GUAYRA, YERUA, LA CALERA, PILAR.
 
@@ -194,10 +209,29 @@ export async function fetchHeightsINA() {
   return { fetchedAt: new Date().toISOString(), source: SOURCE, stations };
 }
 
+/** Alturas de las series extra (Bermejo y Pilcomayo): mismas lecturas que `fetchHeightsINA`, sin niveles de alerta. */
+export async function fetchHeightsINAExtra() {
+  const entries = Object.entries(EXTRA);
+  const obs = await fetchObs(entries.map(([, v]) => v.id), WINDOW_DAYS);
+  const stations = [];
+  for (const [port, { id, river, lat, lon }] of entries) {
+    const arr = obs.get(id);
+    if (!arr || !arr.length) continue;
+    const last = arr.at(-1), prev = arr.length > 1 ? arr.at(-2) : null;
+    const var_m = prev ? round(last.h - prev.h) : null;
+    stations.push({
+      port, river, lat, lon, height_m: round(last.h), var_m, prev_m: prev ? round(prev.h) : null, date: last.date, time: last.time,
+      alert_m: null, evac_m: null,
+      state: var_m == null ? null : var_m > STATE_THRESHOLD_M ? 'CRECE' : var_m < -STATE_THRESHOLD_M ? 'BAJA' : 'ESTAC.',
+    });
+  }
+  return stations;
+}
+
 /** Historia diaria de un puerto: [{date,height_m}] ascendente (último valor de cada día). */
 export async function fetchHeightsINAHistory(port, days = 30) {
   const key = String(port).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
-  const s = SERIES[key];
+  const s = SERIES[key] || EXTRA[key];
   if (!s) throw new Error(`INA: puerto desconocido "${port}"`);
   const n = Math.max(1, Math.min(Number(days) || 30, 3650));
   const obs = await fetchObs([s.id], n);

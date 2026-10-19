@@ -4,6 +4,9 @@
 // trae la pendiente b y el caudal mediano, ajustados con años de alturas de Prefectura/INA contra el
 // caudal GloFAS. Para las fechas desde la emisión del pronóstico del INA en ese puerto, la subida sigue
 // lo que pronostica el INA. Es una estimación: ver el README.
+//
+// Estaciones "observadas" (Paraguay): sin curva ni pronóstico. La subida de un día es la altura medida por Prefectura
+// ese día menos su mediana de los últimos años; solo hay valor para los días con medición (hasta hoy).
 const norm = (x) => (x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
 const parseDay = (iso) => new Date(iso + 'T12:00:00');
 const lerp = (a, b, f) => a + (b - a) * f;
@@ -20,6 +23,7 @@ const PORTS = {
   pasolibres: ['YAPEYU', 'PASO DE LOS LIBRES', 'BOMPLAND'], montecaseros: ['MONTE CASEROS', 'MOCORETA'],
   concordia: ['SALTO GRANDE ABAJO', 'CONCORDIA', 'YERUA'], colon: ['LA CALERA', 'COLON', 'CONCEPCION DEL URUGUAY'],
   fraybentos: ['CAMPICHUELO'], nuevapalmira: ['PARANACITO'],
+  bermejo: ['PUERTO LAVALLE', 'EL COLORADO', 'PUERTO VELAZ'],
 };
 
 export function createRise({ data, extras, ratings }) {
@@ -32,7 +36,7 @@ export function createRise({ data, extras, ratings }) {
   const readings = extras.heights?.stations ?? [];
   const portsOf = (id) => {
     const st = byId[id];
-    const river = riverOf(st) === 'uruguay' ? 'URUGUAY' : 'PARANA';
+    const river = st.kind === 'trib' ? norm(st.name) : riverOf(st) === 'uruguay' ? 'URUGUAY' : 'PARANA';
     return (PORTS[id] || []).map((p) => readings.find((r) => norm(r.port) === p && norm(r.river).includes(river))).filter(Boolean);
   };
 
@@ -59,9 +63,15 @@ export function createRise({ data, extras, ratings }) {
   }
 
   const cache = new Map();
+  const isObs = (id) => Boolean(ratings[id]?.obs);
+  function riseObs(id, t) {
+    const r = ratings[id], h = extras.history?.[`${r.river}|${r.port}`]?.[days[t]];
+    return h == null ? null : h - r.hmed;
+  }
   function riseAt(id, t) {
     const key = id + '|' + t;
     if (cache.has(key)) return cache.get(key);
+    if (isObs(id)) { const v = riseObs(id, t); cache.set(key, v); return v; }
     let v = riseModel(id, t);
     const f = v != null && days[t] ? portsOf(id).map((r) => fcOf(r.port)).find(Boolean) : null;
     if (f) {
@@ -85,5 +95,5 @@ export function createRise({ data, extras, ratings }) {
     cache.set(key, v);
     return v;
   }
-  return { riseAt, byId, days };
+  return { riseAt, byId, days, isObs };
 }

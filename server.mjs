@@ -277,6 +277,16 @@ async function refreshExtras() {
       catch (e) { out.errors.pronostico_ina = e.message; out.forecastINA = prevF ?? null; }
     }
   }
+  // estado oficial de las rutas nacionales (Vialidad): se reconsulta cada 30 min
+  const vial = await optionalImport('vialidad');
+  if (vial) {
+    const prevV = prev.rutasEstado;
+    if (prevV && Date.now() - Date.parse(prevV.fetchedAt) < 30 * 60e3) out.rutasEstado = prevV;
+    else {
+      try { out.rutasEstado = await vial.fetchEstadoRutas(); }
+      catch (e) { out.errors.vialidad = e.message; out.rutasEstado = prevV ?? null; }
+    }
+  }
   const sat = await optionalImport('satellite');
   if (sat) {
     try { out.satellite = { latest: await sat.latestFloodDate(), layers: sat.LAYERS }; }

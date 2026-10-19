@@ -3,6 +3,8 @@
 // y una capa vectorial en SVG que se reproyecta en cada cuadro. Sumar una capa nueva es agregar una
 // entrada en LAYERS (raster por mosaicos) o dibujar en la capa vectorial.
 import { createRise } from './rise.js';
+import { createRutas, CLS, TXT } from './rutas.js';
+import { createServicios, KIND } from './servicios.js';
 
 const $ = (s) => document.querySelector(s);
 const NS = 'http://www.w3.org/2000/svg';
@@ -23,12 +25,14 @@ const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 const json = (u) => fetch(u).then((r) => (r.ok ? r.json() : Promise.reject(new Error(u))));
 
 // ---------- datos
-const [data, extras, ratingsDoc, barrios, geo] = await Promise.all([
+const [data, extras, ratingsDoc, barrios, geo, srvDoc, munDoc] = await Promise.all([
   json('/api/data'),
   json('/api/extras').catch(() => ({})),
   json('/ratings.json').catch(() => ({})),
   json('/barrios.json'),
   json('geo.json'),
+  json('/servicios.json').catch(() => null),
+  json('/municipios.json').catch(() => null),
 ]).catch((e) => {
   $('#stage').insertAdjacentHTML('afterbegin', '<p class="float" style="top:50px;left:10px;padding:8px 12px">No se pudieron cargar los datos. Probá de nuevo en un minuto.</p>');
   throw e;
@@ -136,7 +140,7 @@ const LAYERS = {
 };
 
 // ---------- capa vectorial: ríos, puntos de caudal y barrios
-const gRiv = el('g', {}, vec), gPts = el('g', {}, vec), gBar = el('g', {}, vec), gHot = el('g', {}, vec), gLab = el('g', {}, vec); // gHot: los barrios afectados, siempre por encima
+const gRiv = el('g', {}, vec), gPts = el('g', {}, vec), gRut = el('g', {}, vec), gBar = el('g', {}, vec), gHot = el('g', {}, vec), gSrv = el('g', {}, vec), gLab = el('g', {}, vec); // gHot: los barrios afectados, siempre por encima
 const rivPaths = Object.values(geo.stems).map((st) => ({ c: st.c, n: el('path', { class: 'riv' }, gRiv) }));
 const stPts = data.stations.filter((s) => s.kind === 'main').map((s) => ({
   s, dot: el('circle', { class: 'st-pt', r: 3.5 }, gPts), txt: el('text', { dy: -7, 'text-anchor': 'middle' }, gPts),
@@ -157,6 +161,14 @@ const nodes = BAR.map((b, i) => {
 // diámetro del punto: crece con las familias y, de lejos, se achica para que no se amontonen
 const diam = (b) => clamp(6 + Math.sqrt(b.fam || 20) / 2, 6, 15) * (0.4 + 0.6 * clamp((V.z - 5.5) / 5, 0, 1));
 let selected = -1, labels = [];
+let selRoad = -1, selSrv = -1;
+const SRV = srvDoc ? createServicios({ doc: srvDoc, parent: gSrv, el, riseAt: rise.riseAt, nDays: days.length }) : null;
+if (!SRV) $('#c-srv').closest('label').hidden = true;
+// estado oficial de las rutas nacionales (Vialidad Nacional); las provinciales no figuran
+const EST = extras.rutasEstado || null;
+const RUT = EST ? createRutas({ alertas: EST.alertas, parent: gRut, el }) : null;
+if (!EST) $('#c-rut').closest('label').hidden = true;
+if (!RUT) $('#c-rut').closest('label').hidden = true;
 function renderVec() {
   const s = scale(), on = $('#c-riv').checked;
   // la traza de los ríos es esquemática: de cerca la imagen satelital muestra el río real y la línea desentona
@@ -169,6 +181,14 @@ function renderVec() {
       p.dot.style.display = p.txt.style.display = vis ? '' : 'none';
       if (vis) { p.dot.setAttribute('cx', x.toFixed(1)); p.dot.setAttribute('cy', y.toFixed(1)); p.txt.setAttribute('x', x.toFixed(1)); p.txt.setAttribute('y', y.toFixed(1)); }
     }
+  }
+  if (RUT) {
+    gRut.style.display = $('#c-rut').checked ? '' : 'none';
+    if ($('#c-rut').checked) RUT.render({ X: (lon) => sx(lon, s), Y: (lat) => sy(lat, s), W, H });
+  }
+  if (SRV) { // se ven al acercarse: de lejos serían una nube de puntos
+    const s2 = scale();
+    SRV.render({ X: (lon) => sx(lon, s2), Y: (lat) => sy(lat, s2), W, H, show: $('#c-srv').checked && V.z >= 8.5 });
   }
   gBar.style.display = gHot.style.display = $('#c-bar').checked ? '' : 'none';
   if (!$('#c-bar').checked) { gLab.replaceChildren(); labels = []; return; }
@@ -203,7 +223,28 @@ function renderVec() {
   });
 }
 
+// ---------- estado oficial de las rutas nacionales (Vialidad Nacional)
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const cuando = (iso) => (iso ? new Date(iso).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).replace('.', '') : '');
+function oficialHtml() {
+  if (!EST) return '';
+  const al = EST.alertas.filter((a) => a.zona);
+  const li = (a) => {
+    const k = RUT.index(a), txt = `RN ${esc(a.ruta)} · ${esc(a.prov)} · ${esc(a.tramo)}: <b>${TXT[a.estado] || esc(a.estado.toLowerCase())}</b>`;
+    return `<li><span class="rt-ico ${CLS[a.estado] || 'restr'}"></span>` +
+      (k >= 0 ? `<button type="button" class="lnk" data-rt="${k}">${txt}</button>` : `<span>${txt} <span class="muted">(sin ubicar en el mapa)</span></span>`) + `</li>`;
+  };
+  return `<p class="rut-of"><b>Estado oficial</b> · Vialidad Nacional <span class="muted">· ${cuando(EST.updated)}</span></p>` +
+    (al.length ? `<ul class="bar-keys">${al.map(li).join('')}</ul>` : '<p class="muted small">Sin cortes ni restricciones en las rutas nacionales de la zona.</p>') +
+    `<details class="help"><summary class="muted small">cómo leerlo</summary><p class="muted small">Lo informa Vialidad Nacional, no lo estimamos nosotros. La planilla nombra los tramos por localidades y no trae geometría: la ubicación en el mapa es aproximada y la restricción puede afectar solo una parte del tramo. Solo rutas nacionales: las provinciales las informa cada provincia. Fuente: <a href="${EST.url}" target="_blank" rel="noopener">estado de rutas</a> (argentina.gob.ar, CC BY 4.0).</p></details>`;
+}
+
 // ---------- estados por fecha y resumen
+function drawRutasSum() {
+  if (!EST) return;
+  $('#rut-sum').innerHTML = oficialHtml();
+  $('#rut-sum').querySelectorAll('[data-rt]').forEach((b) => b.addEventListener('click', () => { const k = +b.dataset.rt, bb = RUT.bbox(k); flyToBox(bb, 0.5); selectRoad(k); }));
+}
 function updateStates() {
   const c = { wet: [0, 0], near: [0, 0], dry: [0, 0], na: [0, 0] };
   for (const o of nodes) {
@@ -222,11 +263,45 @@ function updateStates() {
     `<li><span class="bar-ico"></span><span>${fm(c.dry[0])} barrios con inundación poco probable</span></li>` +
     `<li><span class="bar-ico na"></span><span class="muted">${fm(c.na[0])} sin estimación</span></li></ul>` +
     `<details class="help"><summary class="muted small">cómo se estima</summary><p class="muted small">Estimación, no un aviso oficial. La altura de cada barrio sobre el río sale del terreno (SRTM, 30 m) y puede errar varios metros. La subida del río, del caudal del modelo GloFAS o del pronóstico del INA donde lo hay, respecto de su nivel mediano. No cuenta defensas, desagües ni lluvia local. Sin estimación: Paraná arriba de Yacyretá (depende de las represas) y el Delta (marea).</p></details>`;
+  if (SRV) {
+    const r = SRV.update(T), pl = (n, a, b) => `<b>${nf.format(n)}</b> ${n === 1 ? a : b}`;
+    const line = (k, cls, txt) => `<li><span class="bar-ico ${cls}"></span><span>${pl(r.c.e[k], 'escuela', 'escuelas')} y ${pl(r.c.s[k], 'centro de salud', 'centros de salud')} ${txt}</span></li>`;
+    const names = r.wet.slice(0, 6).map((i) => `<li><button type="button" class="lnk" data-sv="${i}">${esc(SRV.items[i].n)}</button></li>`).join('');
+    $('#srv-sum').innerHTML = `<ul class="bar-keys">${line('wet', 'wet', 'con inundación probable')}${line('near', 'near', 'con inundación posible')}</ul>` +
+      (names ? `<ul class="sv-names small">${names}${r.wet.length > 6 ? `<li class="muted">y ${r.wet.length - 6} más</li>` : ''}</ul>` : '') +
+      `<details class="help"><summary class="muted small">cómo leerlo</summary><p class="muted small">Puntos del IGN: escuelas (Mapa Educativo Nacional) y centros de salud (SISA, Ministerio de Salud) a menos de ${srvDoc.maxKm} km de los ríos. Se ven al acercar el mapa. Misma estimación que los barrios: altura del terreno contra subida del río, sin defensas ni desagües. Es una estimación, no un aviso oficial; para saber si un establecimiento funciona, consultá a su autoridad.</p></details>`;
+    $('#srv-sum').querySelectorAll('[data-sv]').forEach((b) => b.addEventListener('click', () => { const i = +b.dataset.sv; flyTo({ lon: SRV.items[i].c[0], lat: SRV.items[i].c[1], z: 14.5 }); selectSrv(i); }));
+  }
   if (selected >= 0) drawCard();
+  if (selSrv >= 0) drawSrvCard();
+}
+
+// ---------- municipio de un barrio (Registro Federal de Gobiernos Locales)
+const MUNI = munDoc ? munDoc.municipios.map((m) => ({ ...m, nn: norm(m.n), np: norm(m.p) })) : [];
+function muniOf(b) {
+  if (!MUNI.length) return null;
+  const p = norm(b.prov), l = norm(b.loc), d = norm(b.dep), en = MUNI.filter((m) => m.np === p);
+  return en.find((m) => m.nn === l) || en.find((m) => m.nn === d) ||
+    en.map((m) => [m, m.c ? Math.hypot((m.c[0] - b.c[0]) * 0.87, m.c[1] - b.c[1]) * 111 : 1e9]).filter((x) => x[1] <= 15).sort((a, b2) => a[1] - b2[1])[0]?.[0] || null;
+}
+function muniHtml(b) {
+  const m = muniOf(b);
+  if (!m) return '';
+  const web = m.web ? (/^https?:/i.test(m.web) ? m.web : 'https://' + m.web) : null;
+  return `<p class="small"><b>Municipio de ${esc(m.n)}</b>${m.pob != null ? ` · ${nf.format(m.pob)} hab. <span class="muted">(Censo 2022)</span>` : ''}</p>` +
+    (m.inu != null ? `<p class="small">Inundaciones reportadas entre 1999 y 2022: <b>${m.inu}</b> <span class="muted">(según el registro de gobiernos locales)</span></p>` : '') +
+    (m.tel || web ? `<p class="small">${m.tel ? `Tel. ${esc(m.tel)}` : ''}${m.tel && web ? ' · ' : ''}${web ? `<a href="${esc(web)}" target="_blank" rel="noopener">sitio del municipio</a>` : ''}</p>` : '');
 }
 
 // ---------- ficha del barrio elegido
 const WORD = { wet: 'inundación probable', near: 'inundación posible (al río le falta menos de 1 m)', dry: 'inundación poco probable', na: 'sin estimación' };
+// tira de colores con el estado de cada día; la raya negra es hoy y la amarilla, la fecha elegida
+function stripSvg(cells) {
+  const N = cells.length;
+  return `<svg class="strip" viewBox="0 0 ${N} 22" preserveAspectRatio="none" aria-hidden="true">` +
+    cells.map((s, t) => `<rect class="${s}" x="${t}" y="4" width="1.02" height="14"/>`).join('') +
+    `<line class="now" x1="${todayIdx + 0.5}" x2="${todayIdx + 0.5}" y1="0" y2="22"/><line class="now" style="stroke:var(--accent)" x1="${T + 0.5}" x2="${T + 0.5}" y1="2" y2="20"/></svg>`;
+}
 function drawCard() {
   const b = BAR[selected], card = $('#card');
   if (!b) { card.hidden = true; return; }
@@ -234,10 +309,7 @@ function drawCard() {
   let first = null;
   const cells = days.map((_, t) => stateOf(b, t));
   for (let t = Math.max(todayIdx, 0); t < days.length; t++) if (cells[t] === 'wet') { first = t; break; }
-  const N = days.length;
-  const strip = `<svg class="strip" viewBox="0 0 ${N} 22" preserveAspectRatio="none" aria-hidden="true">` +
-    cells.map((s, t) => `<rect class="${s}" x="${t}" y="4" width="1.02" height="14"/>`).join('') +
-    `<line class="now" x1="${todayIdx + 0.5}" x2="${todayIdx + 0.5}" y1="0" y2="22"/><line class="now" style="stroke:var(--accent)" x1="${T + 0.5}" x2="${T + 0.5}" y1="2" y2="20"/></svg>`;
+  const strip = stripSvg(cells);
   card.innerHTML = `<button class="btn x" id="card-x" type="button" aria-label="Cerrar">x</button>` +
     `<p class="kicker">barrio-popular</p><h2>${b.n}</h2><div class="muted">${b.loc || b.dep}, ${b.prov}</div>` +
     `<dl><dt>Familias</dt><dd>${b.fam != null ? '~' + nf.format(b.fam) : '—'}${b.viv != null ? ` · ${nf.format(b.viv)} viv.` : ''}</dd>` +
@@ -247,12 +319,66 @@ function drawCard() {
     `<dt>Estado</dt><dd class="st ${st}">${WORD[st]}</dd></dl>` +
     `<div class="muted small">según el modelo, jun → nov</div>${strip}` +
     `<p class="small">${first != null ? `Según el modelo, el primer día con inundación probable desde hoy es el <b>${dShort(days[first])}</b>.` : st === 'na' ? 'Sin estimación para este tramo del río.' : 'El modelo no prevé inundación en este barrio durante el período del pronóstico.'}</p>` +
+    muniHtml(b) +
     `<p class="small muted">Estimación a partir de un modelo de elevación; no es un aviso oficial.</p>` +
     (sta ? `<p class="small"><a href="./#${b.st}">ver ${sta.name} en el monitor →</a></p>` : '');
   card.hidden = false;
   $('#card-x').addEventListener('click', () => select(-1));
 }
+// ---------- ficha de un tramo de ruta (lo que informa Vialidad)
+function drawRoadCard() {
+  const card = $('#card');
+  if (!RUT || selRoad < 0) return;
+  const a = RUT.info(selRoad), lvl = a.estado === 'CORTE TOTAL' ? 'wet' : 'near';
+  card.innerHTML = `<button class="btn x" id="card-x" type="button" aria-label="Cerrar">x</button>` +
+    `<p class="kicker">ruta-nacional</p><h2>RN ${esc(a.ruta)}</h2><div class="muted">${esc(a.prov)} · ${esc(a.tramo)}</div>` +
+    `<dl><dt>Estado oficial</dt><dd class="st ${lvl}">${TXT[a.estado] || esc(a.estado.toLowerCase())}</dd>` +
+    `<dt>Calzada</dt><dd>${esc(a.calzada.toLowerCase() || '—')}</dd>` +
+    `<dt>Largo del tramo</dt><dd>${a.km != null ? '~' + nf.format(a.km) + ' km' : '—'}</dd>` +
+    `<dt>Actualizado</dt><dd>${esc(a.act)}</dd></dl>` +
+    (a.obs ? `<p class="small">${esc(a.obs)}</p>` : '') +
+    `<p class="small muted">Lo informa Vialidad Nacional. La ubicación en el mapa es aproximada y la restricción puede afectar solo una parte del tramo. Para cortes y desvíos, consultá el <a href="${EST.url}" target="_blank" rel="noopener">estado de rutas</a>.</p>`;
+  card.hidden = false;
+  $('#card-x').addEventListener('click', () => { selectRoad(-1); });
+}
+function selectRoad(i) {
+  if (i >= 0) select(-1);
+  if (i >= 0 && selSrv >= 0) { selSrv = -1; if (SRV) SRV.setSel(-1); }
+  selRoad = i;
+  if (RUT) RUT.setSel(i);
+  if (i < 0) $('#card').hidden = true; else drawRoadCard();
+  schedule();
+}
+// ---------- ficha de una escuela o un centro de salud
+function drawSrvCard() {
+  const card = $('#card');
+  if (!SRV || selSrv < 0) return;
+  const it = SRV.items[selSrv], st = SRV.state(selSrv, T), sta = byId[it.st], r = rise.riseAt(it.st, T), cells = SRV.strip(selSrv);
+  let first = null;
+  for (let t = Math.max(todayIdx, 0); t < days.length; t++) if (cells[t] === 'wet') { first = t; break; }
+  card.innerHTML = `<button class="btn x" id="card-x" type="button" aria-label="Cerrar">x</button>` +
+    `<p class="kicker">${KIND[it.t].replace(' ', '-')}</p><h2>${esc(it.n)}</h2><div class="muted">${esc(it.g)}</div>` +
+    `<dl><dt>Sobre el río</dt><dd>${it.x ? 'sin dato confiable' : '~' + nf1.format(Math.max(it.h, 0)) + ' m'}</dd>` +
+    `<dt>Punto de caudal</dt><dd>${sta ? sta.name : '—'}</dd>` +
+    `<dt>Río el ${dShort(days[T])}</dt><dd>${r == null ? '—' : (r >= 0 ? '+' : '−') + nf1.format(Math.abs(r)) + ' m vs. mediana'}</dd>` +
+    `<dt>Estado</dt><dd class="st ${st}">${WORD[st]}</dd></dl>` +
+    `<div class="muted small">según el modelo, jun → nov</div>${stripSvg(cells)}` +
+    `<p class="small">${first != null ? `Según el modelo, el primer día con inundación probable desde hoy es el <b>${dShort(days[first])}</b>.` : st === 'na' ? 'Sin estimación para este tramo del río.' : 'El modelo no prevé inundación en este lugar durante el período del pronóstico.'}</p>` +
+    `<p class="small muted">Estimación a partir de un modelo de elevación; no es un aviso oficial. Ubicación según el IGN (${it.t === 'e' ? 'Mapa Educativo Nacional' : 'SISA, Ministerio de Salud'}).</p>` +
+    (sta ? `<p class="small"><a href="./#${it.st}">ver ${sta.name} en el monitor →</a></p>` : '');
+  card.hidden = false;
+  $('#card-x').addEventListener('click', () => selectSrv(-1));
+}
+function selectSrv(i) {
+  if (i >= 0) select(-1);
+  selSrv = i;
+  if (SRV) SRV.setSel(i);
+  if (i < 0) $('#card').hidden = true; else drawSrvCard();
+  schedule();
+}
 function select(i) {
+  if (i >= 0 && selRoad >= 0) { selRoad = -1; if (RUT) RUT.setSel(-1); }
+  if (i >= 0 && selSrv >= 0) { selSrv = -1; if (SRV) SRV.setSel(-1); }
   const prev = BAR[selected] && nodes[selected];
   selected = i;
   if (prev) prev.n.classList.remove('sel');
@@ -273,14 +399,34 @@ function tipOf(b) {
 }
 vec.addEventListener('mousemove', (ev) => {
   const g = ev.target.closest?.('.bp');
-  if (!g || drag.active) { tip.hidden = true; return; }
-  tip.innerHTML = tipOf(BAR[+g.dataset.i]); tip.hidden = false;
+  if (drag.active) { tip.hidden = true; return; }
+  let html = g ? tipOf(BAR[+g.dataset.i]) : null;
+  const sv = !g && SRV ? ev.target.closest?.('.sv') : null;
+  if (sv) html = tipSrv(+sv.dataset.i);
+  if (!html && RUT && $('#c-rut').checked) {
+    const rc = view.getBoundingClientRect(), s = scale();
+    const ri = RUT.hit(ev.clientX - rc.left, ev.clientY - rc.top, { X: (lon) => sx(lon, s), Y: (lat) => sy(lat, s) });
+    if (ri >= 0) html = tipRoad(ri);
+  }
+  if (!html) { tip.hidden = true; return; }
+  tip.innerHTML = html; tip.hidden = false;
   const r = tip.getBoundingClientRect();
   let x = ev.clientX + 14, y = ev.clientY + 14;
   if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - 14;
   if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - 14;
   tip.style.left = x + 'px'; tip.style.top = y + 'px';
 });
+function tipSrv(i) {
+  const it = SRV.items[i], st = SRV.state(i, T);
+  return `<b>${esc(it.n)}</b><br><span class="muted">${esc(it.g)}</span><br>` +
+    `<div class="row"><span>Sobre el río</span><span>${it.x ? '—' : '~' + nf1.format(Math.max(it.h, 0)) + ' m'}</span></div>` +
+    `<div class="row"><span>Estado</span><span>${WORD[st]}</span></div>`;
+}
+function tipRoad(ri) {
+  const a = RUT.info(ri);
+  return `<b>RN ${esc(a.ruta)}</b> <span class="muted">· ${esc(a.prov)}</span><br>${esc(a.tramo)}<br>` +
+    `<div class="row"><span>Estado oficial</span><span>${TXT[a.estado] || esc(a.estado.toLowerCase())}</span></div>`;
+}
 vec.addEventListener('mouseleave', () => { tip.hidden = true; });
 
 // ---------- dibujo
@@ -376,7 +522,14 @@ view.addEventListener('pointercancel', endPtr);
 view.addEventListener('click', (ev) => {
   if (drag.moved) { drag.moved = false; return; }
   const g = ev.target.closest?.('.bp');
-  if (g) select(+g.dataset.i);
+  if (g) { select(+g.dataset.i); return; }
+  const sv = SRV ? ev.target.closest?.('.sv') : null;
+  if (sv) { selectSrv(+sv.dataset.i); return; }
+  if (RUT && $('#c-rut').checked) {
+    const rc = view.getBoundingClientRect(), s = scale();
+    const ri = RUT.hit(ev.clientX - rc.left, ev.clientY - rc.top, { X: (lon) => sx(lon, s), Y: (lat) => sy(lat, s) }, 12);
+    if (ri >= 0) selectRoad(ri);
+  }
 });
 view.addEventListener('wheel', (ev) => {
   ev.preventDefault(); stopFly();
@@ -428,6 +581,8 @@ if (matchMedia('(max-width: 760px)').matches) $('#layers details').open = false;
 $('#c-sat').addEventListener('change', (ev) => { LAYERS.sat.on = ev.target.checked; schedule(); });
 $('#c-bar').addEventListener('change', schedule);
 $('#c-riv').addEventListener('change', schedule);
+$('#c-rut').addEventListener('change', schedule);
+$('#c-srv').addEventListener('change', schedule);
 // ---------- búsqueda de barrio o localidad
 const q = $('#q'), res = $('#q-res');
 let results = [], cur = -1;
@@ -477,7 +632,7 @@ q.addEventListener('blur', () => setTimeout(() => { res.hidden = true; }, 150));
   await wait();
   Object.assign(V, m ? { z: +m[1], lat: +m[2], lon: +m[3] } : homeView());
   clampView();
-  drawTime(); updateStates();
+  drawTime(); updateStates(); drawRutasSum();
   if (bi >= 0) select(bi);
   schedule();
 }

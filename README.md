@@ -29,6 +29,7 @@ Fuentes complementarias (módulos opcionales en `sources/`; si uno falla, el res
   - **Salto Grande**: caudal erogado, vertido, aporte y cota, extraídos del sitio de la CTM (saltogrande.org; PDF diario más datos horarios). Cada día cuesta varios pedidos, así que la serie se guarda en `data/dam-saltogrande.json` y se piden solo los días que faltan, una vez por día. Los días anteriores a los últimos 3 se promedian con 4 lecturas horarias, con un error de pocos por ciento. **Ojo:** el sitio rechaza clientes que no se presentan como navegador, y el módulo envía un User-Agent genérico de navegador.
   - Las series de las tres represas se guardan en `data/dam-*.json`.
   - Se comparan con el modelo, que **no conoce las maniobras de compuertas**. Si una represa larga bastante más de lo que estima el modelo, la página lo avisa en las ciudades aguas abajo.
+- **Estado de rutas nacionales** (`sources/vialidad.mjs`): lo que informa Vialidad Nacional en [Estado de rutas](https://www.argentina.gob.ar/transporte/vialidad-nacional/estado-de-rutas): habilitada, restringida, corte parcial o corte total por tramo, con observaciones y hora de actualización. La tabla de esa página sale de una planilla pública (hoja `tablavisible`) y el servidor lee esa misma planilla como CSV, a lo sumo cada 30 minutos. **Solo rutas nacionales**: las provinciales las informa cada provincia. Los textos de argentina.gob.ar están bajo CC BY 4.0.
 - **Satélite** (`sources/satellite.mjs`): recorte de ~50 km alrededor de cada punto, cacheado en `data/sat/`.
   - **Fondo**: mosaico Sentinel-2 cloudless 2025 de EOX. Licencia CC BY-NC-SA 4.0: **solo uso no comercial**.
   - **Inundación**: Copernicus GFM (radar Sentinel-1, servidor de EODC). Se muestra **una pasada por vez**, la más reciente con detecciones en 14 días, con selector de las anteriores. Acumular días suma artefactos de borde de pasada, que se ven como franjas rectas sobre campos secos.
@@ -41,7 +42,11 @@ Página aparte (`/mapa.html`, enlace "mapa" en la barra superior): un mapa casi 
 
 - **Satélite**: mosaico Sentinel-2 cloudless, de la misma grilla de mosaicos que usa el monitor, hasta ~10 m por píxel.
 - **Barrios populares**: un punto por barrio (más grande cuantas más familias), que de cerca pasa a ser su contorno. Rojo si el modelo da la inundación como probable en la fecha elegida con la barra de abajo, naranja si es posible (al río le falta menos de 1 m). Ficha con familias, altura sobre el río y una tira con los días de inundación probable. Búsqueda por barrio o localidad.
+- **Escuelas y centros de salud**: puntos del IGN (escuelas del Mapa Educativo Nacional; centros de salud de SISA, Ministerio de Salud) a menos de 8 km de los ríos, con la misma estimación que los barrios. Cuadrados para las escuelas, cruces para los centros de salud; rojo si el modelo da la inundación como probable en la fecha elegida, naranja si es posible. Aparecen al acercar el mapa; el panel resume cuántos hay y lista los primeros. Los datos de los portales de educación y salud (padrón educativo, REFES) no traen coordenadas, por eso se usan las capas del IGN.
+- **Estado de rutas nacionales**: los tramos de rutas nacionales que Vialidad Nacional informa con corte total, corte parcial o restricción, dibujados sobre la traza de la ruta, más la lista completa de la zona con la hora de actualización. Al tocar uno, su ficha con la observación oficial. **Es lo que informa Vialidad, no una estimación nuestra** (probamos estimarlo con el terreno y lo descartamos: el modelo de elevación no ve los terraplenes sobre los que van las rutas). La **ubicación es aproximada**: la planilla de Vialidad nombra los tramos por localidades y no trae geometría, así que el servidor los ubica con la traza del IGN y la API Georef (`sources/vialidad-geo.mjs`), y solo dibuja los que coinciden con los km oficiales; los demás (límites provinciales, empalmes con rutas provinciales, accesos) quedan solo en la lista. Solo rutas nacionales: las provinciales las informa cada provincia.
 - **Ríos y puntos de caudal**: la traza esquemática del río y las estaciones del monitor.
+
+**En la ficha de cada barrio** se suman los datos de su municipio, del [Registro Federal de Gobiernos Locales](https://datos.gob.ar/dataset/base-de-registro-federal-de-gobiernos-locales) (Ministerio del Interior, CC BY 4.0): población (Censo 2022), inundaciones reportadas entre 1999 y 2022 (tal como las informa el registro, sin reinterpretarlas), teléfono y sitio web. El barrio se asocia al municipio por nombre de localidad o departamento y, si no coincide, por la sede más cercana (hasta 15 km).
 
 **Cómo se estima la exposición** (`public/rise.js`):
 
@@ -49,7 +54,8 @@ Página aparte (`/mapa.html`, enlace "mapa" en la barra superior): un mapa casi 
 - **Subida del río** (`scripts/build-ratings.mjs` → `public/ratings.json`): metros que sube el río por cada vez que se multiplica el caudal (h = a + b·ln Q), ajustados con ~3 años de alturas de Prefectura (vía INA) contra el caudal GloFAS de cada estación. Para cada fecha, la subida respecto del caudal mediano; desde la emisión del pronóstico del INA, la subida sigue lo que pronostica el INA para ese puerto.
 - **Estado**: inundación probable si la subida del río supera la altura del barrio; posible si le falta menos de un metro; poco probable en el resto.
 - **Qué no es**: una **estimación**, no un aviso oficial. El modelo de elevación puede errar varios metros (ve techos y árboles), la subida sale de un modelo, y no se consideran defensas, desagües ni lluvia local. No hay estimación donde la altura del río depende de las represas (Paraná arriba de Yacyretá) ni en el Delta, que es de marea.
-- Los dos scripts se corren a mano cuando se quiera actualizar (`node scripts/build-barrios.mjs`, `node scripts/build-ratings.mjs`); las respuestas de elevación se cachean en `data/cache/`.
+- **Escuelas y salud** (`scripts/build-servicios.mjs` → `public/servicios.json`) y **municipios** (`scripts/build-municipios.mjs` → `public/municipios.json`): misma idea; las descargas se cachean en `data/cache/`.
+- Los scripts se corren a mano cuando se quiera actualizar (`node scripts/build-barrios.mjs`, `node scripts/build-servicios.mjs`, `node scripts/build-municipios.mjs`, `node scripts/build-ratings.mjs`); las respuestas de elevación se cachean en `data/cache/`.
 
 **Sumar una capa**: `public/mapa.js` tiene un motor propio y sin dependencias. Una capa raster por mosaicos es una entrada en `LAYERS` (una función `(nivel, fila, columna) → URL`) más una casilla en el panel; una capa vectorial se dibuja en `renderVec()`, que reproyecta en cada cuadro.
 
@@ -68,7 +74,10 @@ Uso no comercial gratuito en Open-Meteo. Para uso comercial o alto tráfico, rev
 | `scripts/build-geo.mjs` | regenera `public/geo.json` desde Natural Earth |
 | `public/mapa.html`, `mapa.js`, `mapa.css` | página del mapa (motor de mapa propio) |
 | `public/rise.js` | cuánto sube el río en cada estación y fecha (curva altura–caudal + pronóstico INA) |
-| `public/barrios.json`, `public/ratings.json` | datos de la capa de barrios; los generan `scripts/build-barrios.mjs` y `scripts/build-ratings.mjs` |
+| `public/rutas.js` | capa de rutas del mapa (estado oficial de Vialidad) |
+| `sources/vialidad.mjs`, `sources/vialidad-geo.mjs`, `sources/rutas-nacionales.json` | estado de rutas nacionales y su ubicación sobre la traza; la traza la genera `scripts/build-rutas-geo.mjs` |
+| `public/servicios.js` | capa de escuelas y centros de salud del mapa |
+| `public/barrios.json`, `public/servicios.json`, `public/municipios.json`, `public/ratings.json` | datos de las capas; los generan los `scripts/build-*.mjs` |
 
 ### Agregar o mover un punto
 

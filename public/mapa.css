@@ -26,6 +26,12 @@ body.mapa { height: 100dvh; display: flex; flex-direction: column; overflow: hid
 .bar-ico.near { background: var(--st-warning); opacity: 1; }
 .bar-ico.wet { background: var(--st-critical); opacity: 1; }
 .bar-ico.na { opacity: 0.3; }
+.rt-ico { display: inline-block; flex: none; width: 14px; height: 4px; margin-top: 7px; border-radius: 2px; background: var(--ink); opacity: 0.6; }
+.rut-of { margin: 8px 0 3px; }
+#card ul { margin: 4px 0 0; padding-left: 16px; }
+.rt-ico.total { background: var(--st-critical); opacity: 1; } .rt-ico.parcial { background: var(--st-warning); opacity: 1; } .rt-ico.restr { background: #3b82f6; opacity: 1; }
+.sv-names { list-style: none; margin: 4px 0 2px; padding: 0; display: grid; gap: 1px; }
+.lnk { font: inherit; color: var(--link); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; text-decoration: underline; text-underline-offset: 0.2em; }
 
 .search { position: absolute; z-index: 6; top: 10px; left: 50%; transform: translateX(-50%); width: min(340px, calc(100% - 440px)); }
 .search input { width: 100%; box-sizing: border-box; font: inherit; padding: 4px 8px; background: var(--bg); color: var(--ink); border: 1px solid var(--rule); box-shadow: 3px 3px 0 var(--rule); border-radius: 0; }
@@ -60,6 +66,21 @@ body.mapa { height: 100dvh; display: flex; flex-direction: column; overflow: hid
 .attrib { position: absolute; z-index: 4; left: 10px; bottom: 4px; right: 10px; margin: 0; font-size: 11px; line-height: 1.3; pointer-events: none; text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg); color: var(--ink); }
 
 /* capa vectorial */
+#vec .sv { stroke: var(--bg); stroke-width: 1.5px; stroke-linejoin: round; cursor: pointer; }
+#vec .sv.dry { fill: var(--ink); fill-opacity: 0.55; }
+#vec .sv.near { fill: var(--st-warning); }
+#vec .sv.wet { fill: var(--st-critical); }
+#vec .sv.na { fill: var(--ink-3); fill-opacity: 0.35; }
+#vec .sv.sel { stroke: #ffd400; stroke-width: 3px; }
+#view.sat #vec .sv.dry { fill: #fff; fill-opacity: 0.75; }
+#view.sat #vec .sv { stroke: #000; stroke-width: 1px; }
+#view.sat #vec .sv.sel { stroke: #ffd400; stroke-width: 3px; }
+#vec .rt, #vec .rt-case { fill: none; stroke: var(--bg); stroke-width: 9px; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; pointer-events: none; }
+#vec .rt { fill: none; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+#vec .rt.total { stroke: var(--st-critical); stroke-width: 6px; }
+#vec .rt.parcial { stroke: var(--st-warning); stroke-width: 6px; }
+#vec .rt.restr { stroke: #3b82f6; stroke-width: 6px; }
+#vec .rt.sel { stroke: #ffd400; stroke-width: 9px; stroke-opacity: 0.8; }
 #vec text { font: 11px var(--mono); fill: var(--ink); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
 #vec .riv { fill: none; stroke: #4aa3ff; stroke-width: 1.6; stroke-opacity: 0.75; stroke-linejoin: round; pointer-events: none; }
 #vec .st-pt { fill: var(--bg); stroke: var(--ink); stroke-width: 1.5; pointer-events: none; }

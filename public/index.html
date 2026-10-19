@@ -17,14 +17,15 @@
       <span class="sb-sub">cuenca del plata · en vivo</span>
     </div>
     <div class="sb-right">
+      <a class="sb-link" href="mapa.html">mapa</a>
       <a class="sb-link" href="https://x.com/pppp_edro" target="_blank" rel="noopener">x/pppp_edro</a>
       <a class="sb-link" href="https://github.com/3-ppp/caudal" target="_blank" rel="noopener">github</a>
       <button id="theme" class="sb-btn" type="button" aria-label="Cambiar entre tema claro y oscuro">oscuro</button>
     </div>
   </header>
 
-  <main class="layout">
-    <section class="map-col" aria-label="Mapa de la cuenca">
+  <main class="monitor">
+    <section class="hero" aria-label="Mapa de la cuenca">
       <header class="title">
         <p class="prompt-line" aria-hidden="true"><span id="site-host">:~# caudal</span> <span class="cursor">_</span></p>
         <h1>Paraná y Uruguay</h1>
@@ -41,27 +42,22 @@
         <svg id="map" role="img" aria-label="Mapa de los ríos Paraná y Uruguay: el ancho del trazo es el caudal, el color su diferencia con lo normal para la fecha"></svg>
         <svg id="map-axes" class="map-axes" aria-hidden="true"></svg>
         <div class="coords" id="coords" aria-hidden="true"></div>
+        <div class="time" role="group" aria-label="Fecha del mapa">
+          <button id="play" class="btn" type="button" aria-label="Reproducir">▶</button>
+          <div class="time-mid">
+            <div class="time-label"><strong id="date-label">—</strong> <span id="date-rel" class="muted"></span></div>
+            <input id="slider" type="range" min="0" max="0" value="0" aria-label="Fecha">
+            <div class="time-scale muted"><span id="t-start"></span><span>hoy</span><span id="t-end"></span></div>
+          </div>
+          <button id="today" class="btn btn-text" type="button">hoy</button>
+        </div>
       </div>
       <div class="legend" id="legend"></div>
     </section>
 
-    <section class="panel" aria-label="Datos">
+    <section class="dash" aria-label="Datos">
       <section class="kpis" id="kpis" aria-label="Situación de hoy"></section>
-
-      <div class="time">
-        <div class="time-head">
-          <button id="play" class="btn" type="button" aria-label="Reproducir">▶</button>
-          <div class="time-label">
-            <strong id="date-label">—</strong>
-            <span id="date-rel" class="muted"></span>
-          </div>
-          <button id="today" class="btn btn-text" type="button">hoy</button>
-        </div>
-        <input id="slider" type="range" min="0" max="0" value="0" aria-label="Fecha">
-        <div class="time-scale muted"><span id="t-start"></span><span>hoy</span><span id="t-end"></span></div>
-      </div>
-
-      <article class="card">
+      <article class="card c-profile">
         <div class="card-head">
           <div><p class="kicker">perfil</p><h2 id="prof-title">A lo largo del río</h2></div>
           <div class="seg" id="prof-tabs" role="tablist" aria-label="Río"><button type="button" role="tab" data-river="parana">Paraná</button><button type="button" role="tab" data-river="uruguay">Uruguay</button></div>
@@ -69,7 +65,6 @@
         <details class="help"><summary>cómo leer</summary><p class="muted small">Caudal en cada punto según el modelo GloFAS, ordenado por kilómetros desde el nacimiento. La banda es el rango habitual para esa fecha. Los dos ríos comparten escala.</p></details>
         <svg id="profile" class="chart" role="img" aria-label="Perfil de caudal a lo largo del río"></svg>
       </article>
-
       <article class="card" id="detail">
         <div class="detail-head">
           <div>
@@ -88,15 +83,13 @@
         <section id="heights" class="sub-block" hidden></section>
         <details id="sat-box" class="sub-block fold" open hidden><summary>desde el satélite</summary><figure id="sat" class="sat"></figure></details>
       </article>
-
       <article class="card" id="dams-card" hidden>
         <p class="kicker">represas</p>
         <h2>Lo que sale de cada represa</h2>
         <details class="help"><summary>cómo leer</summary><p class="muted small">Caudal que sale de cada represa, medido por su operador, junto al caudal que estima el modelo en ese punto.</p></details>
         <div id="dams"></div>
       </article>
-
-      <article class="card">
+      <article class="card c-table">
         <p class="kicker">todos-los-puntos</p>
         <details class="fold table-fold"><summary>ver la tabla de todos los puntos</summary>
         <div class="table-wrap">
@@ -107,10 +100,9 @@
         </div>
         </details>
       </article>
-
       <footer class="foot small muted">
         <div class="foot-status"><span id="clock" class="sb-clock"></span><ul class="sb-sources" id="sources" aria-label="Estado de las fuentes"></ul></div>
-        <p>Caudal modelado por <a href="https://global-flood.emergency.copernicus.eu/" target="_blank" rel="noopener">GloFAS</a> (Copernicus), servido por <a href="https://open-meteo.com/en/docs/flood-api" target="_blank" rel="noopener">Open-Meteo</a>. No es una medición: puede diferir de los registros oficiales. Lo normal es el rango 2000–2024 para cada fecha. Alturas: Prefectura Naval. Represas: ONS, EBY (vía INA), CTM Salto Grande. Imágenes: Sentinel-2 cloudless de EOX y Copernicus GFM. Cartografía: Natural Earth.</p>
+        <p>Caudal modelado por <a href="https://global-flood.emergency.copernicus.eu/" target="_blank" rel="noopener">GloFAS</a> (Copernicus), servido por <a href="https://open-meteo.com/en/docs/flood-api" target="_blank" rel="noopener">Open-Meteo</a>. No es una medición: puede diferir de los registros oficiales. Lo normal es el rango 2000–2024 para cada fecha. Alturas: Prefectura Naval. Represas: ONS, EBY (vía INA), CTM Salto Grande. Imágenes: Sentinel-2 cloudless de EOX y Copernicus GFM. Cartografía: Natural Earth. Barrios populares: RENABAP (CC BY 4.0), con altura del terreno SRTM (NASA).</p>
         <p>Para alertas y evacuaciones, consultá al <a href="https://www.ina.gob.ar/alerta/" target="_blank" rel="noopener">INA</a>, a Prefectura y a Defensa Civil.</p>
         <p>Este sitio cuenta visitas sin cookies ni datos personales: solo totales por día.</p>
         <p id="updated"></p>

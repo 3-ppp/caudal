@@ -33,6 +33,26 @@ Fuentes complementarias (módulos opcionales en `sources/`; si uno falla, el res
   - **Fondo**: mosaico Sentinel-2 cloudless 2025 de EOX. Licencia CC BY-NC-SA 4.0: **solo uso no comercial**.
   - **Inundación**: Copernicus GFM (radar Sentinel-1, servidor de EODC). Se muestra **una pasada por vez**, la más reciente con detecciones en 14 días, con selector de las anteriores. Acumular días suma artefactos de borde de pasada, que se ven como franjas rectas sobre campos secos.
 
+## Mapa (barrios populares y más capas)
+
+Página aparte (`/mapa.html`, enlace "mapa" en la barra superior): un mapa casi a pantalla completa, con zoom hasta cada barrio, que cruza el caudal con el [Registro Nacional de Barrios Populares](https://datos.gob.ar/dataset/registro-nacional-de-barrios-populares) (RENABAP, Secretaría de Integración Socio Urbana, CC BY 4.0). La vista y el barrio elegido van en la URL (`#zoom/lat/lon/bID`), así que se puede compartir un barrio.
+
+**Capas** (panel de la izquierda). La inundación observada por el radar (Copernicus GFM) no está en este mapa: se ve en el monitor, en "desde el satélite" de cada punto.
+
+- **Satélite**: mosaico Sentinel-2 cloudless, de la misma grilla de mosaicos que usa el monitor, hasta ~10 m por píxel.
+- **Barrios populares**: un punto por barrio (más grande cuantas más familias), que de cerca pasa a ser su contorno. Rojo si el modelo da la inundación como probable en la fecha elegida con la barra de abajo, naranja si es posible (al río le falta menos de 1 m). Ficha con familias, altura sobre el río y una tira con los días de inundación probable. Búsqueda por barrio o localidad.
+- **Ríos y puntos de caudal**: la traza esquemática del río y las estaciones del monitor.
+
+**Cómo se estima la exposición** (`public/rise.js`):
+
+- **Altura sobre el río** (`scripts/build-barrios.mjs` → `public/barrios.json`): para cada barrio a menos de 12 km del Paraná o el Uruguay, cota del terreno (SRTM 30 m de la NASA, vía [OpenTopoData](https://www.opentopodata.org/)) menos la cota del río en el punto más cercano. El río se toma como el mínimo de los puntos vecinos de su traza, porque el modelo de elevación aplana el agua.
+- **Subida del río** (`scripts/build-ratings.mjs` → `public/ratings.json`): metros que sube el río por cada vez que se multiplica el caudal (h = a + b·ln Q), ajustados con ~3 años de alturas de Prefectura (vía INA) contra el caudal GloFAS de cada estación. Para cada fecha, la subida respecto del caudal mediano; desde la emisión del pronóstico del INA, la subida sigue lo que pronostica el INA para ese puerto.
+- **Estado**: inundación probable si la subida del río supera la altura del barrio; posible si le falta menos de un metro; poco probable en el resto.
+- **Qué no es**: una **estimación**, no un aviso oficial. El modelo de elevación puede errar varios metros (ve techos y árboles), la subida sale de un modelo, y no se consideran defensas, desagües ni lluvia local. No hay estimación donde la altura del río depende de las represas (Paraná arriba de Yacyretá) ni en el Delta, que es de marea.
+- Los dos scripts se corren a mano cuando se quiera actualizar (`node scripts/build-barrios.mjs`, `node scripts/build-ratings.mjs`); las respuestas de elevación se cachean en `data/cache/`.
+
+**Sumar una capa**: `public/mapa.js` tiene un motor propio y sin dependencias. Una capa raster por mosaicos es una entrada en `LAYERS` (una función `(nivel, fila, columna) → URL`) más una casilla en el panel; una capa vectorial se dibuja en `renderVec()`, que reproyecta en cada cuadro.
+
 Uso no comercial gratuito en Open-Meteo. Para uso comercial o alto tráfico, revisar sus [términos](https://open-meteo.com/en/terms).
 
 ## Archivos
@@ -46,6 +66,9 @@ Uso no comercial gratuito en Open-Meteo. Para uso comercial o alto tráfico, rev
 | `public/` | interfaz (HTML + JS + CSS, sin build) |
 | `scripts/calibrate.mjs` | recalibra los puntos tras editar `stations.json` |
 | `scripts/build-geo.mjs` | regenera `public/geo.json` desde Natural Earth |
+| `public/mapa.html`, `mapa.js`, `mapa.css` | página del mapa (motor de mapa propio) |
+| `public/rise.js` | cuánto sube el río en cada estación y fecha (curva altura–caudal + pronóstico INA) |
+| `public/barrios.json`, `public/ratings.json` | datos de la capa de barrios; los generan `scripts/build-barrios.mjs` y `scripts/build-ratings.mjs` |
 
 ### Agregar o mover un punto
 

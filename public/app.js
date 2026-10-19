@@ -26,7 +26,7 @@ const [data, geo] = await Promise.all([
   fetch('/api/data').then((r) => { if (!r.ok) throw new Error('sin datos'); return r.json(); }),
   fetch('geo.json').then((r) => r.json()),
 ]).catch((e) => {
-  document.querySelector('.panel').insertAdjacentHTML('afterbegin',
+  document.querySelector('.dash').insertAdjacentHTML('afterbegin',
     `<p class="card">Los datos todavía se están descargando. Probá de nuevo en un minuto.</p>`);
   throw e;
 });
@@ -126,24 +126,40 @@ const map = $('#map');
 // ---------- zoom y arrastre: se cambia el viewBox; trazos, puntos y textos se dividen por K
 // para conservar su tamaño en pantalla (al acercarse se gana detalle, no tamaño)
 var MAP_AXES = null; // se asigna al final, cuando ya existen las funciones de coordenadas
-const home = () => ({ x: innerWidth <= 600 ? -70 : 0, y: 0, w: W, h: H }); // en pantallas chicas, encuadre corrido al oeste
+// El mapa ocupa el ancho de la pantalla: el encuadre sigue la forma real del elemento (ASP = alto / ancho),
+// no una proporción fija. K = 1 equivale a PS0 píxeles por unidad del mapa: trazos y textos se dividen por K
+// y conservan su tamaño en pantalla.
+const KMAX = 24, PS0 = 0.5;
+let ASP = 1;
+const mapSize = () => ({ w: map.clientWidth || 600, h: map.clientHeight || 600 });
+const updateAsp = () => { const s = mapSize(); ASP = s.h / s.w; };
+const wAt = (k) => mapSize().w / (PS0 * k);   // ancho visible (en unidades del mapa) a zoom k
+const wMax = () => Math.max(W, H / ASP);      // el mapa entero a la vista
+const wMin = () => wAt(KMAX);
+// Encuadre de inicio: en pantallas anchas, la cuenca baja (de Guaíra al Delta, con el Uruguay); en las altas, toda la cuenca
+function home() {
+  const wide = ASP < 0.9, top = wide ? (B.n + 23.2) * SC : 0, hh = H - top;
+  const padL = !wide && innerWidth <= 600 ? 70 : 0; // en el celular, margen al oeste para los nombres de las ciudades
+  const w = Math.max(W, hh / ASP), h = w * ASP;
+  return { x: W / 2 - w / 2 - padL, y: top + hh / 2 - h / 2, w, h };
+}
+updateAsp();
 let view = home(), K = 1;
-const KMAX = 24;
+const isHome = () => { const h = home(); return Math.abs(view.w - h.w) < 1 && Math.abs(view.x - h.x) < 1 && Math.abs(view.y - h.y) < 1; };
 const scaled = [];      // [nodo, atributo, valor a K = 1]
 const labelNodes = [];  // textos anclados a un punto, con su desplazamiento en pantalla
 function applyView() {
-  const h0 = home();
-  view.w = clamp(view.w, W / KMAX, W);
-  view.h = view.w * H / W;
-  view.x = clamp(view.x, h0.x, h0.x + W - view.w);
-  view.y = clamp(view.y, 0, H - view.h);
-  K = W / view.w;
+  view.w = clamp(view.w, wMin(), wMax());
+  view.h = view.w * ASP;
+  const cx = clamp(view.x + view.w / 2, 0, W), cy = clamp(view.y + view.h / 2, 0, H); // el centro no sale del mapa
+  view.x = cx - view.w / 2; view.y = cy - view.h / 2;
+  K = mapSize().w / view.w / PS0;
   map.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
   map.style.setProperty('--k', K);
   map.style.setProperty('--kt', K ** 0.85); // los textos crecen un poco al acercarse
   map.classList.toggle('deep', K >= 4);    // con mucho zoom el trazo esquemático no calza con la imagen
   map.toggleAttribute('data-zoomed', K >= 2);
-  map.style.touchAction = K > 1.01 ? 'none' : 'pan-y'; // sin zoom, el dedo sigue desplazando la página
+  map.style.touchAction = isHome() ? 'pan-y' : 'none'; // en el encuadre de inicio, el dedo sigue desplazando la página
   for (const [n, a, v] of scaled) n.setAttribute(a, (v / K).toFixed(2));
   for (const t of labelNodes) {
     const z = K >= 2 && t.dataset.zdx != null;
@@ -152,12 +168,12 @@ function applyView() {
     t.setAttribute('text-anchor', z ? t.dataset.zanchor : t.dataset.anchor);
   }
   if (MAP_AXES) MAP_AXES();
-  $('#zout').disabled = K <= 1.01;
-  $('#zhome').disabled = K <= 1.01;
+  $('#zout').disabled = view.w >= wMax() - 0.5;
+  $('#zhome').disabled = isHome();
 }
 applyView();
 const gSat = el('g', {}, map);
-const gBase = el('g', {}, map), gRiver = el('g', { class: 'river-g' }, map), gLabels = el('g', {}, map), gDots = el('g', {}, map);
+const gBase = el('g', {}, map), gRiver = el('g', { class: 'river-g' }, map), gFlow = el('g', { class: 'flow-g' }, map), gLabels = el('g', {}, map), gDots = el('g', {}, map);
 
 for (const c of geo.coast) scaled.push([el('path', { d: pathOf(c), fill: 'none', stroke: 'var(--coast)', 'stroke-width': 1.2, 'stroke-linejoin': 'round' }, gBase), 'stroke-width', 1.2]);
 for (const r of geo.rivers) {
@@ -184,7 +200,8 @@ const segs = [];
 for (const [river, stem] of Object.entries(stems)) {
   for (let i = 1; i < stem.c.length; i++) {
     const [x1, y1] = P(stem.c[i - 1]), [x2, y2] = P(stem.c[i]);
-    segs.push({ river, km: (stem.km[i - 1] + stem.km[i]) / 2, n: el('line', { x1, y1, x2, y2, 'stroke-linecap': 'round' }, gRiver) });
+    // f: trazo fino y punteado que se anima río abajo mientras se reproduce el tiempo (la corriente)
+    segs.push({ river, km: (stem.km[i - 1] + stem.km[i]) / 2, n: el('line', { x1, y1, x2, y2, 'stroke-linecap': 'round' }, gRiver), f: el('line', { x1, y1, x2, y2, class: 'flow' }, gFlow) });
   }
 }
 function atKm(k, t, list = RIV.parana) {
@@ -269,6 +286,7 @@ function drawMap() {
     const v = atKm(s.km, T, RIV[s.river]);
     s.n.setAttribute('stroke', color(v.s));
     s.n.setAttribute('stroke-width', (WQ(v.q) / K).toFixed(2));
+    s.f.setAttribute('stroke-width', (WQ(v.q) * 0.3 / K).toFixed(2));
   }
   const py = byId.paraguay;
   for (const p of pyPaths) { p.setAttribute('stroke', color(score(py, T))); p.setAttribute('stroke-width', (WQ(py.q[T]) / K).toFixed(2)); }
@@ -286,7 +304,7 @@ function drawMap() {
 // Leyenda
 function drawLegend() {
   const lg = $('#legend');
-  const px = map.getBoundingClientRect().width / W;
+  const px = PS0; // píxeles de pantalla por unidad del mapa: el ancho dibujado de cada trazo
   // barra de color horizontal, como un colorbar de matplotlib: marco fino y marcas en p10, mediana y p90
   const CW = 220, CH = 10, off = (s) => (s + 1.6) / 3.7;
   const stops = C.stops.map(([s, c]) => `<stop offset="${(off(s) * 100).toFixed(1)}%" stop-color="rgb(${c})"/>`).join('');
@@ -859,12 +877,13 @@ $('#today').addEventListener('click', () => { stop(); setT(todayIdx); });
 
 let timer = null;
 const play = $('#play');
-function stop() { clearInterval(timer); timer = null; play.textContent = '▶'; play.setAttribute('aria-label', 'Reproducir'); }
+function stop() { clearInterval(timer); timer = null; play.textContent = '▶'; play.setAttribute('aria-label', 'Reproducir'); map.classList.remove('flowing'); }
 play.addEventListener('click', () => {
   if (timer) return stop();
   // desde hoy o desde el final, arranca 60 días atrás para ver llegar la crecida
   if (T >= days.length - 1 || T === todayIdx) setT(Math.max(0, todayIdx - 60));
   play.textContent = '❚❚'; play.setAttribute('aria-label', 'Pausar');
+  map.classList.add('flowing');
   timer = setInterval(() => { if (T >= days.length - 1) return stop(); setT(T + 1); }, 140);
 });
 document.addEventListener('keydown', (ev) => {
@@ -887,8 +906,8 @@ $('#updated').textContent = `Actualizado: ${up.toLocaleString('es-AR', { dateSty
 const FOCUS_K = 8;
 function focusStation(id, k = Math.max(FOCUS_K, K), animate = true) {
   const [x, y] = P([byId[id].lon, byId[id].lat]);
-  const w = W / clamp(k, 1, KMAX);
-  flyTo({ x: x - w / 2, y: y - (w * H / W) / 2, w, h: w * H / W }, animate);
+  const w = wAt(clamp(k, 1, KMAX));
+  flyTo({ x: x - w / 2, y: y - (w * ASP) / 2, w, h: w * ASP }, animate);
 }
 // Vuelo suave: el zoom se interpola en escala geométrica (se siente parejo) y el centro, lineal
 let flyRaf = 0;
@@ -902,7 +921,7 @@ function flyTo(target, animate = true, ms = 650) {
   const step = (now) => {
     const f = Math.min(1, (now - t0) / ms);
     const e = f < 0.5 ? 2 * f * f : 1 - (-2 * f + 2) ** 2 / 2; // ease-in-out
-    const w = from.w * (target.w / from.w) ** e, h = w * H / W;
+    const w = from.w * (target.w / from.w) ** e, h = w * ASP;
     view = { x: lerp(fc.x, tc.x, e) - w / 2, y: lerp(fc.y, tc.y, e) - h / 2, w, h };
     applyView();
     drawMap();
@@ -915,7 +934,7 @@ function flyTo(target, animate = true, ms = 650) {
 const pick = (id) => { select(id); focusStation(id); };
 $('#st-focus').addEventListener('click', () => {
   focusStation(SEL);
-  if (innerWidth <= 900) $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  scrollTo({ top: 0, behavior: 'smooth' }); // el mapa está arriba de todo
 });
 
 // ================= MONITOR: barra de estado, tablero de situación, coordenadas, tema =================
@@ -1095,8 +1114,8 @@ const toUser = (cx, cy, ctm = map.getScreenCTM().inverse()) => new DOMPoint(cx, 
 function zoomed() { applyView(); drawMap(); scheduleSat(); }
 function zoomAt(cx, cy, f) {
   const p = toUser(cx, cy);
-  const w = clamp(view.w / f, W / KMAX, W), r = w / view.w;
-  view = { x: p.x - (p.x - view.x) * r, y: p.y - (p.y - view.y) * r, w, h: w * H / W };
+  const w = clamp(view.w / f, wMin(), wMax()), r = w / view.w;
+  view = { x: p.x - (p.x - view.x) * r, y: p.y - (p.y - view.y) * r, w, h: w * ASP };
   zoomed();
 }
 const zoomCenter = (f) => { const r = map.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, f); };
@@ -1131,9 +1150,9 @@ map.addEventListener('pointermove', (ev) => {
     const [a, b] = [...ptrs.values()];
     const f = Math.hypot(a.x - b.x, a.y - b.y) / gesture.d0;
     const m1 = toUser((a.x + b.x) / 2, (a.y + b.y) / 2, gesture.ctm);
-    const w = clamp(gesture.v0.w / f, W / KMAX, W), r = w / gesture.v0.w;
+    const w = clamp(gesture.v0.w / f, wMin(), wMax()), r = w / gesture.v0.w;
     const m = gesture.m0;
-    view = { x: m.x - (m.x - gesture.v0.x) * r - (m1.x - m.x) * r, y: m.y - (m.y - gesture.v0.y) * r - (m1.y - m.y) * r, w, h: w * H / W };
+    view = { x: m.x - (m.x - gesture.v0.x) * r - (m1.x - m.x) * r, y: m.y - (m.y - gesture.v0.y) * r - (m1.y - m.y) * r, w, h: w * ASP };
     applyView();
   }
 });
@@ -1161,8 +1180,7 @@ function loadSat() {
   if (!satOn) { gSat.replaceChildren(); tileLevels.clear(); return; }
   const r = map.getBoundingClientRect();
   const a = toUser(r.left, r.top), b = toUser(r.right, r.bottom);
-  const h0 = home();
-  const x0 = clamp(a.x, h0.x, h0.x + W), x1 = clamp(b.x, h0.x, h0.x + W), y0 = clamp(a.y, 0, H), y1 = clamp(b.y, 0, H);
+  const x0 = clamp(a.x, 0, W), x1 = clamp(b.x, 0, W), y0 = clamp(a.y, 0, H), y1 = clamp(b.y, 0, H);
   if (x1 - x0 < 1 || y1 - y0 < 1) return;
   const lon = (x) => B.w + x / (COS * SC), lat = (y) => B.n - y / SC;
   const dpp = (lon(x1) - lon(x0)) / ((x1 - x0) / (b.x - a.x) * r.width * Math.min(devicePixelRatio || 1, 2));
@@ -1199,10 +1217,22 @@ $('#zsat').addEventListener('click', (ev) => {
   ev.currentTarget.setAttribute('aria-pressed', satOn);
   loadSat();
 });
-addEventListener('resize', () => { if (K <= 1.01) view = home(); applyView(); drawMap(); drawLegend(); scheduleSat(); });
+// El mapa sigue el tamaño de su elemento (ventana, fuentes, layout): si estaba en el encuadre de inicio, se vuelve a encuadrar
+let lastSize = mapSize().w + 'x' + mapSize().h;
+function onMapResize() {
+  const s = mapSize(), key = s.w + 'x' + s.h;
+  if (key === lastSize) return;
+  lastSize = key;
+  const wasHome = isHome();
+  updateAsp();
+  if (wasHome) view = home();
+  applyView(); drawMap(); drawLegend(); drawMapAxes(); scheduleSat();
+}
+addEventListener('resize', onMapResize);
 drawAll();
 lastReported = SEL; statsReady = true; // desde acá, cada elección de localidad cuenta
 // el marco del mapa sigue al tamaño real del elemento (cambios de layout, fuentes, ventana)
-new ResizeObserver(() => drawMapAxes()).observe(map);
+new ResizeObserver(onMapResize).observe(map);
+drawMapAxes();
 if (HASH[2]) focusStation(SEL, +HASH[2], false);
 if (HASH[3]) $('#zsat').click();

@@ -149,24 +149,16 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: 8px 0 2p
 .ico.alerta { background: var(--st-warning); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .ico.evac { background: var(--st-critical); }
 
-/* ---------- layout */
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(380px, 0.95fr);
-  min-height: calc(100vh - var(--sb-h));
-}
-.map-col {
-  position: sticky; top: var(--sb-h); height: calc(100vh - var(--sb-h));
-  display: flex; flex-direction: column; gap: 8px;
-  padding: 14px 8px 12px 16px;
-}
+/* ---------- layout: el mapa arriba, a todo el ancho; todos los datos, debajo */
+.hero { padding: 12px 16px 0; display: flex; flex-direction: column; gap: 8px; }
+.title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 16px; }
 .prompt-line { margin: 0; color: var(--ink-2); }
-.title h1 { margin-top: 2px; }
-.tagline { margin: 3px 0 0; color: var(--accent); }
-.title .lede { margin: 6px 0 0; max-width: 52ch; }
+.title h1 { margin: 0; font-size: clamp(22px, 2.2vw, 28px); }
+.tagline { margin: 0; color: var(--accent); }
+.title .lede { margin: 0; flex-basis: 100%; color: var(--ink-2); font-size: 12.5px; }
 
 /* el mapa es una figura de matplotlib: panel propio, eje en caja, marcas de lon/lat afuera */
-.map-wrap { flex: 1; min-height: 0; position: relative; padding: 4px 6px 26px 50px; background: var(--fig); }
+.map-wrap { position: relative; height: clamp(440px, calc(100vh - var(--sb-h) - 200px), 820px); padding: 4px 6px 26px 50px; background: var(--fig); }
 #map { width: 100%; height: 100%; display: block; background: var(--map-bg); border: 1px solid var(--frame); }
 .map-axes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .map-axes text { font: 11px var(--plot); fill: var(--ink); }
@@ -192,7 +184,19 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: 8px 0 2p
   border: 1px solid var(--legend-edge); border-radius: 3px; padding: 3px 8px; background: var(--fig);
 }
 
-.panel { padding: 12px 18px 32px 12px; display: flex; flex-direction: column; }
+/* los datos, en dos columnas debajo del mapa */
+.dash {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 32px; align-items: start;
+  grid-template-areas: "kpis kpis" "detail profile" "detail dams" "table table" "foot foot";
+  padding: 6px 16px 32px;
+}
+.dash .kpis { grid-area: kpis; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#detail { grid-area: detail; }
+.c-profile { grid-area: profile; }
+#dams-card { grid-area: dams; }
+.c-table { grid-area: table; }
+.dash .foot { grid-area: foot; }
+.dash > * { min-width: 0; }
 .card { background: none; border: 0; border-top: 2px groove var(--rule); padding: 12px 0 10px; margin-top: 10px; }
 .card h2 + p { margin: 3px 0 8px; }
 
@@ -218,23 +222,25 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: 8px 0 2p
 }
 .kpi-link:hover { text-decoration-thickness: 2px; }
 /* al llegar desde el tablero: el destino queda visible bajo las barras fijas y se resalta un momento */
-#detail, .gauge-row, .dam { scroll-margin-top: calc(var(--sb-h) + 110px); }
+#detail, .gauge-row, .dam { scroll-margin-top: calc(var(--sb-h) + 12px); }
 .flash { animation: flash 1.8s ease-out; }
 @keyframes flash { 0%, 35% { background: var(--code-bg); box-shadow: 0 0 0 3px var(--accent); } 100% { background: transparent; box-shadow: 0 0 0 3px transparent; } }
 @media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--accent); } }
 
 /* ---------- tiempo */
 .time {
-  position: sticky; top: var(--sb-h); z-index: 5;
-  background: var(--bg);
-  padding: 8px 0;
-  border-top: 2px groove var(--rule);
+  position: absolute; right: 16px; bottom: 36px; z-index: 3; /* abajo a la derecha: ahí el mapa es océano y Uruguay, sin ríos */
+  width: min(540px, calc(100% - 120px));
+  display: flex; align-items: center; gap: 12px;
+  background: var(--bg); border: 1px solid var(--frame); box-shadow: 3px 3px 0 var(--rule);
+  padding: 5px 12px;
 }
-.time-head { display: flex; align-items: center; gap: 12px; }
-.time-label { flex: 1; display: flex; flex-direction: column; line-height: 1.3; }
-.time-label strong { font-size: 14px; color: var(--strong); }
+.time-mid { flex: 1; min-width: 0; }
+.time-label { line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.time-label strong { font-size: 13px; color: var(--strong); }
 #date-rel { font-size: 12px; color: var(--accent); }
-.time-scale { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-2); }
+.time input[type=range] { display: block; width: 100%; margin: 2px 0 0; }
+.time-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-2); line-height: 1.1; }
 
 /* ---------- figuras (matplotlib) */
 .chart { width: 100%; height: auto; display: block; overflow: visible; background: var(--fig); padding: 6px 4px 2px; }
@@ -349,14 +355,19 @@ tr.river-row th::before { content: "# "; color: var(--accent); }
 }
 @media (max-width: 900px) {
   .statusbar { gap: 12px; padding: 0 10px 0 12px; }
-  .layout { grid-template-columns: minmax(0, 1fr); }
-  .map-col { position: static; height: auto; padding: 12px 12px 0; }
-  .map-wrap { height: auto; aspect-ratio: 1000 / 1080; max-height: 88vh; flex: none; }
+  .hero { padding: 10px 10px 0; }
+  .map-wrap { height: min(76vh, 640px); }
   .legend { padding-left: 8px; }
-  .panel { padding: 8px 12px 24px; }
+  .dash { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 6px 12px 24px; grid-template-areas: "kpis" "profile" "detail" "dams" "table" "foot"; }
+  .dash .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .time { left: 50%; right: auto; transform: translateX(-50%); width: calc(100% - 64px); bottom: 34px; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 600px) {
+  .statusbar .sb-link[target] { display: none; }
+  .time-scale { display: none; }
+  .dash .kpis { grid-template-columns: minmax(0, 1fr); }
+  .kpi ol.many { columns: 1; }
   .sb-clock { display: none; }
   .kpi .v { font-size: 17px; }
   .map-wrap { padding: 4px 4px 24px 42px; }
@@ -415,3 +426,14 @@ details.dam .warn { color: var(--st-critical); font-weight: 600; }
 .foot-status .sb-clock { display: inline; }
 @media (max-width: 600px) { .sb-sub { display: none; } .sb-right { gap: 8px; } }
 #sat { margin: 8px 0 0; }
+
+/* ---------- la corriente: mientras se reproduce el tiempo, un trazo punteado fino corre río abajo */
+.flow { display: none; fill: none; stroke: #fff; stroke-opacity: 0.7; stroke-linecap: butt; pointer-events: none; }
+#map.flowing .flow {
+  display: inline;
+  stroke-dasharray: calc(7 / var(--k, 1)) calc(15 / var(--k, 1));
+  animation: flow 0.9s linear infinite;
+}
+@keyframes flow { to { stroke-dashoffset: calc(-22 / var(--k, 1)); } }
+@media (prefers-reduced-motion: reduce) { #map.flowing .flow { display: none; } }
+

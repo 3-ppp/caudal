@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>:~# caudal · mapa</title>
+  <meta name="description" content="Barrios populares del Paraná y el Uruguay sobre la imagen satelital, con el agua que el río podría alcanzar y la inundación que vio el radar.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/favicon.svg">
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mapa.css">
+</head>
+<body class="mapa">
+  <header class="statusbar" role="banner">
+    <div class="sb-brand">
+      <span class="sb-name"><span class="prompt" aria-hidden="true">:~#</span> caudal<span class="cursor" aria-hidden="true">_</span></span>
+      <span class="sb-sub">mapa · barrios y crecida</span>
+    </div>
+    <div class="sb-right">
+      <a class="sb-link" href="./">monitor</a>
+      <a class="sb-link" href="https://x.com/pppp_edro" target="_blank" rel="noopener">x/pppp_edro</a>
+      <a class="sb-link" href="https://github.com/3-ppp/caudal" target="_blank" rel="noopener">github</a>
+      <button id="theme" class="sb-btn" type="button" aria-label="Cambiar entre tema claro y oscuro">oscuro</button>
+    </div>
+  </header>
+
+  <main id="stage">
+    <div id="view" role="application" aria-label="Mapa de barrios populares sobre la imagen satelital" tabindex="0">
+      <div class="lyr" id="l-sat"></div>
+      <svg id="vec" aria-hidden="false"></svg>
+    </div>
+
+    <div class="search">
+      <input id="q" type="search" placeholder="buscar barrio o localidad…" autocomplete="off" spellcheck="false" aria-label="Buscar barrio o localidad">
+      <ul id="q-res" hidden></ul>
+    </div>
+
+    <div class="zoom-ctl" role="group" aria-label="Zoom del mapa">
+      <button class="btn" id="zin" type="button" aria-label="Acercar">+</button>
+      <button class="btn" id="zout" type="button" aria-label="Alejar">−</button>
+      <button class="btn" id="zhome" type="button" aria-label="Ver toda la zona">⟲</button>
+    </div>
+
+    <aside id="layers" class="float">
+      <details open>
+        <summary><span class="kicker">capas</span></summary>
+        <label class="lyr-row"><input type="checkbox" id="c-sat" checked> <span>satélite <span class="muted">· Sentinel-2, 2025</span></span></label>
+        <label class="lyr-row"><input type="checkbox" id="c-bar" checked> <span>barrios populares</span></label>
+        <div class="lyr-sub" id="bar-sum"></div>
+        <label class="lyr-row"><input type="checkbox" id="c-riv" checked> <span>ríos y puntos de caudal</span></label>
+      </details>
+    </aside>
+
+    <aside id="card" class="float" hidden aria-live="polite"></aside>
+
+    <div id="timebar" class="float">
+      <button id="play" class="btn" type="button" aria-label="Reproducir">▶</button>
+      <div class="tb-mid">
+        <div class="tb-label"><strong id="date-label">—</strong> <span id="date-rel" class="muted"></span></div>
+        <input id="slider" type="range" min="0" max="0" value="0" aria-label="Fecha">
+      </div>
+      <button id="today" class="btn btn-text" type="button">hoy</button>
+    </div>
+
+    <p class="attrib small muted">Imagen: Sentinel-2 cloudless © EOX · Barrios: RENABAP (CC BY 4.0) · Altura: SRTM (NASA). Estimación, no un aviso oficial.</p>
+  </main>
+  <div id="tip" class="tip" role="tooltip" hidden></div>
+  <script src="mapa.js" type="module"></script>
+</body>
+</html>

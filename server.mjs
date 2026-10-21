@@ -567,6 +567,10 @@ const server = createServer(async (req, res) => {
       try { return send(req, res, await cachedFile(path.join(DATA, 'extras.json')), 'public, max-age=300'); }
       catch { return sendText(res, 200, '{}', { 'content-type': TYPES['.json'] }); }
     }
+    if (p === '/api/precip') {
+      try { return send(req, res, await cachedFile(path.join(DATA, 'precip.json')), 'public, max-age=900'); }
+      catch { return sendText(res, 200, 'null', { 'content-type': TYPES['.json'], 'cache-control': 'no-store' }); }
+    }
     if (p === '/health') {
       const h = await health();
       res.writeHead(h.ok ? 200 : 503, { 'content-type': TYPES['.json'], 'cache-control': 'no-store' });
@@ -628,3 +632,21 @@ try {
 setInterval(safeRefresh, REFRESH_MS);
 safeRefreshExtras().then(warmPasses).then(warmTiles);
 setInterval(() => safeRefreshExtras().then(warmPasses), EXTRAS_MS);
+
+// lluvia sobre la cuenca (grilla de 0,5°): tarda unos minutos porque se pide despacio, así que va aparte y cada 8 horas
+const PRECIP_MS = 8 * 3600e3;
+let refreshingPrecip = null;
+async function refreshPrecip() {
+  const file = path.join(DATA, 'precip.json');
+  try { if (Date.now() - (await stat(file)).mtimeMs < PRECIP_MS - 600e3) return; } catch {}
+  const mod = await optionalImport('precip');
+  if (!mod) return;
+  const grid = await mod.fetchPrecipGrid();
+  await writeFile(file, JSON.stringify(grid));
+  log(`lluvia actualizada: ${grid.nx}×${grid.ny} puntos, ${grid.days[0]} → ${grid.days.at(-1)}`);
+}
+const safeRefreshPrecip = () => (refreshingPrecip ||= refreshPrecip()
+  .catch((e) => log('error en la lluvia:', e.message))
+  .finally(() => (refreshingPrecip = null)));
+safeRefreshPrecip();
+setInterval(safeRefreshPrecip, PRECIP_MS);

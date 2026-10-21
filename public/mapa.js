@@ -24,7 +24,7 @@ const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 const json = (u) => fetch(u).then((r) => (r.ok ? r.json() : Promise.reject(new Error(u))));
 
 // ---------- datos
-const [data, extras, ratingsDoc, barrios, geo, cauDoc, pDoc, munDoc] = await Promise.all([
+const [data, extras, ratingsDoc, barrios, geo, cauDoc, pDoc, precDoc, munDoc] = await Promise.all([
   json('/api/data'),
   json('/api/extras').catch(() => ({})),
   json('/ratings.json').catch(() => ({})),
@@ -32,6 +32,7 @@ const [data, extras, ratingsDoc, barrios, geo, cauDoc, pDoc, munDoc] = await Pro
   json('geo.json'),
   json('/cauces.json').catch(() => null),
   json('/puertos.json').catch(() => null),
+  json('/api/precip').catch(() => null),
   json('/municipios.json').catch(() => null),
 ]).catch((e) => {
   $('#stage').insertAdjacentHTML('afterbegin', '<p class="float" style="top:50px;left:10px;padding:8px 12px">No se pudieron cargar los datos. Probá de nuevo en un minuto.</p>');
@@ -222,8 +223,79 @@ function renderLoc(s) {
   }
   for (; k < locNodes.length; k++) locNodes[k].c.style.display = locNodes[k].t.style.display = 'none';
 }
+// ---------- lluvia: acumulado de los 7 días que terminan en la fecha elegida (Open-Meteo, grilla de 0,5°; últimos 45 días y
+// pronóstico a 16). Es lluvia del modelo, gruesa: sirve para ver dónde llovió o va a llover en la región, no en un barrio.
+const PRC = precDoc?.days ? precDoc : null;
+if (!PRC) $('#c-rain').closest('label').hidden = true;
+const rainCv = $('#rain'), RAIN_DAYS = 7, accCache = new Map();
+const RAMP = [[0, 255, 255, 255, 0], [3, 200, 230, 255, 70], [20, 100, 175, 250, 130], [50, 45, 105, 225, 165], [100, 85, 45, 185, 195], [200, 130, 0, 150, 215]];
+function rainRGBA(mm) {
+  if (mm <= 0) return null;
+  let i = 1;
+  while (i < RAMP.length - 1 && mm > RAMP[i][0]) i++;
+  const a = RAMP[i - 1], b = RAMP[i], f = clamp((mm - a[0]) / (b[0] - a[0]), 0, 1);
+  return [lerp(a[1], b[1], f), lerp(a[2], b[2], f), lerp(a[3], b[3], f), lerp(a[4], b[4], f)];
+}
+function accGrid(date) {
+  if (accCache.has(date)) return accCache.get(date);
+  const i = PRC.days.indexOf(date);
+  let g = null;
+  if (i >= RAIN_DAYS - 1) {
+    g = new Float32Array(PRC.nx * PRC.ny);
+    for (let k = 0; k < g.length && g; k++) {
+      let sum = 0;
+      for (let d = i - RAIN_DAYS + 1; d <= i; d++) { const x = PRC.v[d][k]; if (x == null) { g = null; break; } sum += x; }
+      if (g) g[k] = sum;
+    }
+  }
+  accCache.set(date, g);
+  return g;
+}
+function rainAt(g, lon, lat) {
+  const fx = (lon - PRC.lon0) / PRC.step, fy = (PRC.lat0 - lat) / PRC.step;
+  if (fx < 0 || fy < 0 || fx > PRC.nx - 1 || fy > PRC.ny - 1) return null;
+  const x0 = Math.min(Math.floor(fx), PRC.nx - 2), y0 = Math.min(Math.floor(fy), PRC.ny - 2), tx = fx - x0, ty = fy - y0, n = PRC.nx;
+  return lerp(lerp(g[y0 * n + x0], g[y0 * n + x0 + 1], tx), lerp(g[(y0 + 1) * n + x0], g[(y0 + 1) * n + x0 + 1], tx), ty);
+}
+let rainKey = '';
+function renderRain(s) {
+  const on = PRC && $('#c-rain').checked;
+  rainCv.style.display = on ? '' : 'none';
+  if (!on) { $('#rain-sum').innerHTML = ''; rainKey = ''; return; }
+  const g = accGrid(days[T]);
+  $('#rain-sum').innerHTML = `<div class="grad"><span class="muted small">0</span><i class="gbar rain"></i><span class="muted small">200 mm</span></div>` +
+    (g ? `<p class="small muted lg-note">acumulado de 7 días hasta el ${dShort(days[T])} · pasá el cursor para ver el valor</p>` : `<p class="small muted lg-note">Sin dato de lluvia para esta fecha: hay los últimos 45 días y el pronóstico a 16.</p>`);
+  const key = [days[T], V.lon.toFixed(4), V.lat.toFixed(4), s.toFixed(3), W, H].join('|');
+  if (key === rainKey) return;
+  rainKey = key;
+  const blk = 6, w = Math.ceil(W / blk), h = Math.ceil(H / blk);
+  if (rainCv.width !== w || rainCv.height !== h) { rainCv.width = w; rainCv.height = h; }
+  const ctx = rainCv.getContext('2d'), img = ctx.createImageData(w, h);
+  if (g) {
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const lon = V.lon + ((i + 0.5) * blk - W / 2) / (s * COS), lat = V.lat - ((j + 0.5) * blk - H / 2) / s;
+      const mm = rainAt(g, lon, lat), c = mm == null ? null : rainRGBA(mm);
+      if (!c) continue;
+      // el borde de la grilla se desvanece en una celda: sin corte recto
+      const fx = (lon - PRC.lon0) / PRC.step, fy = (PRC.lat0 - lat) / PRC.step;
+      const edge = clamp(Math.min(fx, fy, PRC.nx - 1 - fx, PRC.ny - 1 - fy), 0, 1);
+      const o = (j * w + i) * 4;
+      img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = c[3] * edge * 0.75;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+function tipRain(ev) {
+  if (!PRC || !$('#c-rain').checked) return null;
+  const g = accGrid(days[T]);
+  if (!g) return null;
+  const rc = view.getBoundingClientRect(), s = scale();
+  const mm = rainAt(g, V.lon + (ev.clientX - rc.left - W / 2) / (s * COS), V.lat - (ev.clientY - rc.top - H / 2) / s);
+  return mm == null ? null : `<b>${nf.format(mm)} mm</b> <span class="muted">de lluvia en 7 días hasta el ${dShort(days[T])}</span>`;
+}
 function renderVec() {
   const s = scale(), on = $('#c-riv').checked;
+  renderRain(s);
   renderLoc(s);
   // la traza de los ríos es esquemática: de cerca la imagen satelital muestra el río real y la línea desentona
   gRiv.style.display = on && V.z < 9.5 ? '' : 'none';
@@ -373,6 +445,7 @@ vec.addEventListener('mousemove', (ev) => {
     const ri = RUT.hit(ev.clientX - rc.left, ev.clientY - rc.top, { X: (lon) => sx(lon, s), Y: (lat) => sy(lat, s) });
     if (ri >= 0) html = tipRoad(ri);
   }
+  if (!html) html = tipRain(ev);
   if (!html) { tip.hidden = true; return; }
   tip.innerHTML = html; tip.hidden = false;
   const r = tip.getBoundingClientRect();
@@ -532,7 +605,7 @@ function drawTime() {
   const n = T - todayIdx;
   $('#date-rel').textContent = n === 0 ? 'hoy' : n < 0 ? `hace ${-n} día${n === -1 ? '' : 's'}` : `pronóstico · en ${n} día${n === 1 ? '' : 's'}`;
 }
-function setT(t) { T = clamp(t, 0, days.length - 1); drawTime(); updateStates(); }
+function setT(t) { T = clamp(t, 0, days.length - 1); drawTime(); updateStates(); if (PRC && $('#c-rain').checked) schedule(); }
 slider.addEventListener('input', () => { stopPlay(); setT(+slider.value); });
 $('#today').addEventListener('click', () => { stopPlay(); setT(todayIdx); });
 let timer = null;
@@ -552,6 +625,7 @@ $('#c-sat').addEventListener('change', (ev) => { LAYERS.sat.on = ev.target.check
 $('#c-bar').addEventListener('change', schedule);
 $('#c-riv').addEventListener('change', schedule);
 $('#c-loc').addEventListener('change', schedule);
+$('#c-rain').addEventListener('change', schedule);
 $('#c-rut').addEventListener('change', schedule);
 // ---------- búsqueda de barrio o localidad
 const q = $('#q'), res = $('#q-res');

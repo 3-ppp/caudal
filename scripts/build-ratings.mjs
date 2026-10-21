@@ -2,7 +2,7 @@
 // multiplica el caudal (pendiente b de h = a + b·ln Q) y su caudal mediano de referencia.
 // Se ajusta con años de alturas diarias (escalas de Prefectura vía INA) contra el caudal GloFAS en la
 // misma estación. La capa de barrios lo usa para convertir caudal en subida del río.
-//   node scripts/build-ratings.mjs [años=3] [estaciones]   (p. ej. `node scripts/build-ratings.mjs 3 bermejo`: solo esas, el resto se conserva)
+//   node scripts/build-ratings.mjs [años=3] [estaciones|cauces]   (p. ej. `node scripts/build-ratings.mjs 3 bermejo`: solo esas, el resto se conserva)
 import { writeFile, readFile } from 'node:fs/promises';
 import { fetchHeightsINAHistory } from '../sources/heights-ina.mjs';
 
@@ -55,6 +55,7 @@ function fit(pts) {
   for (const [x, y] of pts) { sxy += (x - mx) * (y - my); sxx += (x - mx) ** 2; syy += (y - my) ** 2; }
   return { b: sxy / sxx, r: sxy / Math.sqrt(sxx * syy), n };
 }
+const quantile = (v, q) => { const s = [...v].sort((a, b) => a - b); return s[Math.floor((s.length - 1) * q)]; };
 const median = (v) => { const s = [...v].sort((a, b) => a - b); return s[Math.floor((s.length - 1) / 2)]; };
 
 const out = {};
@@ -89,6 +90,19 @@ for (const [id, port] of Object.entries(OBS)) {
   out[id] = { obs: true, port, river: 'PARAGUAY', hmed: +median(v).toFixed(2), n: v.length };
   console.log(id.padEnd(13), `altura mediana ${out[id].hmed} m (${port}, n=${v.length})`);
 }
+// Cauces menores (public/cauces.json): igual que el Paraguay, solo la altura medida contra su mediana
+try {
+  const { cauces } = JSON.parse(await readFile(new URL('public/cauces.json', ROOT), 'utf8'));
+  for (const c of cauces) for (const g of c.gauges) {
+    if (ONLY && !ONLY.includes(g.id) && !ONLY.includes('cauces')) continue;
+    let hist;
+    try { hist = await fetchHeightsINAHistory(g.port, YEARS * 365); } catch (e) { console.log(g.id.padEnd(13), 'sin historia:', e.message); continue; }
+    const v = hist.map((x) => x.height_m).filter((x) => x != null);
+    if (v.length < MIN_PTS) { console.log(g.id.padEnd(13), g.port, 'historia insuficiente (' + v.length + ')'); continue; }
+    out[g.id] = { obs: true, port: g.port, river: g.river, hmed: +median(v).toFixed(2), n: v.length, p10: +quantile(v, 0.1).toFixed(2), p90: +quantile(v, 0.9).toFixed(2) };
+    console.log(g.id.padEnd(13), g.port.padEnd(34), 'mediana', out[g.id].hmed, 'm · p10', out[g.id].p10, '· p90', out[g.id].p90, '· n', v.length);
+  }
+} catch (e) { console.log('cauces:', e.message); }
 if (ONLY) { // se conservan las curvas de las demás estaciones
   try { Object.assign(out, { ...JSON.parse(await readFile(new URL('public/ratings.json', ROOT), 'utf8')).estaciones, ...out }); } catch {}
 }

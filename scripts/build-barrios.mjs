@@ -12,9 +12,11 @@ import { existsSync } from 'node:fs';
 import { createRio, dp, root, rootPath } from './lib/rio.mjs';
 
 const SRC_URL = 'https://archivo.infraestructura.gob.ar/dataset/ssisu/20231205_info_publica.geojson';
-const MAX_KM = 12;
+const MAX_KM = 12;          // Paraná, Uruguay, Paraguay, Bermejo
+const MAX_KM_CAUCE = 4;     // ríos menores (cauces.json): la crecida de un arroyo no llega lejos
+const MAX_H_CAUCE = 10;     // y un barrio más de 10 m sobre un arroyo no se muestra
 
-const { dist, nearestRiver, stationFor, elevations, refAt } = await createRio();
+const { dist, nearestRiver, stationFor, elevations, refAt, cauces } = await createRio();
 
 let srcPath = process.argv[2];
 if (!srcPath) {
@@ -56,10 +58,12 @@ const cand = [];
 for (const f of src.features) {
   const rs = rings(f.geometry).sort((a, b) => b.length - a.length);
   const c = ringCentroid(rs[0]);
-  const near = nearestRiver(c);
-  if (near.d <= MAX_KM) cand.push({ f, rs, c, near });
+  // el curso más cercano: un río menor solo si está a menos de MAX_KM_CAUCE y más cerca que el río grande
+  const nb = nearestRiver(c, 'main'), nc = cauces.length ? nearestRiver(c, 'cauce') : { d: Infinity };
+  const near = nc.d <= MAX_KM_CAUCE && nc.d < nb.d ? nc : nb.d <= MAX_KM ? nb : null;
+  if (near) cand.push({ f, rs, c, near });
 }
-console.log(`a menos de ${MAX_KM} km de un río:`, cand.length);
+console.log(`junto a un curso de agua:`, cand.length, `(${cand.filter((x) => x.near.river.startsWith('c:')).length} en ríos menores)`);
 
 // barrios: centroide + hasta 4 vértices repartidos del contorno principal
 const samples = cand.map(({ rs, c }) => {
@@ -77,6 +81,7 @@ cand.forEach(({ f, rs, c, near }, i) => {
   if (!els.length) return;
   const e = els.length > 2 ? els[1] : els[0]; // segunda más baja: el punto bajo, sin dejarse engañar por un pixel suelto
   const h = e - refAt(near); // sin recortar: un valor muy negativo delata una referencia de río mal tomada
+  if (near.river.startsWith('c:') && h > MAX_H_CAUCE) return;
   const p = f.properties;
   // estación de caudal del mismo río más cercana por km
   const s = stationFor(near);
@@ -85,7 +90,7 @@ cand.forEach(({ f, rs, c, near }, i) => {
     id: p.id_renabap, n: p.nombre_barrio, loc: p.localidad, dep: p.departamento, prov: p.provincia,
     fam: p.cantidad_familias_aproximada ?? null, viv: p.cantidad_viviendas_aproximadas ?? null,
     c: [+c[0].toFixed(5), +c[1].toFixed(5)], d: +near.d.toFixed(1), km: Math.round(near.km), r: near.river, st: s.id,
-    h: +h.toFixed(1), p: poly, ...(h < -3 ? { x: 1 } : {}),
+    h: +h.toFixed(1), p: poly, ...(h < (near.river.startsWith('c:') ? -2 : -3) ? { x: 1 } : {}),
   });
 });
 out.sort((a, b) => a.h - b.h);
@@ -94,7 +99,7 @@ const doc = {
   fuente: 'Registro Nacional de Barrios Populares (RENABAP) · Secretaría de Integración Socio Urbana · datos.gob.ar · CC BY 4.0',
   elevacion: 'SRTM 30 m (NASA) vía OpenTopoData. Altura sobre el río estimada, con error de varios metros.',
   generado: new Date().toISOString().slice(0, 10),
-  maxKm: MAX_KM,
+  maxKm: MAX_KM, maxKmCauce: MAX_KM_CAUCE,
   barrios: out,
 };
 const file = root('public/barrios.json');

@@ -104,6 +104,9 @@ export const EXTRA = {
   'EL COLORADO (SERIE LARGA)': { id: 6521, river: 'BERMEJO' },
   'SAUZALITO (SERIE LARGA)': { id: 29393, river: 'BERMEJO' },
 };
+// Cauces menores (Mesopotamia, Chaco, Santa Fe): los genera scripts/build-cauces.mjs
+import { readFileSync } from 'node:fs';
+try { Object.assign(EXTRA, JSON.parse(readFileSync(new URL('./gauges-extra.json', import.meta.url), 'utf8'))); } catch {}
 // No existen en INA (sin escala en alturas_prefe): GUAYRA, YERUA, LA CALERA, PILAR.
 
 const getJson = async (url, timeoutMs = 20000) => {
@@ -214,14 +217,14 @@ export async function fetchHeightsINAExtra() {
   const entries = Object.entries(EXTRA);
   const obs = await fetchObs(entries.map(([, v]) => v.id), WINDOW_DAYS);
   const stations = [];
-  for (const [port, { id, river, lat, lon }] of entries) {
+  for (const [port, { id, river, lat, lon, grp, alert, evac }] of entries) {
     const arr = obs.get(id);
     if (!arr || !arr.length) continue;
     const last = arr.at(-1), prev = arr.length > 1 ? arr.at(-2) : null;
     const var_m = prev ? round(last.h - prev.h) : null;
     stations.push({
-      port, river, lat, lon, height_m: round(last.h), var_m, prev_m: prev ? round(prev.h) : null, date: last.date, time: last.time,
-      alert_m: null, evac_m: null,
+      port, river, lat, lon, ...(grp ? { grp } : {}), height_m: round(last.h), var_m, prev_m: prev ? round(prev.h) : null, date: last.date, time: last.time,
+      alert_m: alert ?? null, evac_m: evac ?? null,
       state: var_m == null ? null : var_m > STATE_THRESHOLD_M ? 'CRECE' : var_m < -STATE_THRESHOLD_M ? 'BAJA' : 'ESTAC.',
     });
   }

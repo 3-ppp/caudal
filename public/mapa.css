@@ -68,15 +68,6 @@ body.mapa { height: 100dvh; display: flex; flex-direction: column; overflow: hid
 .attrib { position: absolute; z-index: 4; left: 10px; bottom: 4px; right: 10px; margin: 0; font-size: 11px; line-height: 1.3; pointer-events: none; text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg); color: var(--ink); }
 
 /* capa vectorial */
-#vec .sv { stroke: var(--bg); stroke-width: 1.5px; stroke-linejoin: round; cursor: pointer; }
-#vec .sv.dry { fill: var(--ink); fill-opacity: 0.55; }
-#vec .sv.near { fill: var(--st-warning); }
-#vec .sv.wet { fill: var(--st-critical); }
-#vec .sv.na { fill: var(--ink-3); fill-opacity: 0.35; }
-#vec .sv.sel { stroke: #ffd400; stroke-width: 3px; }
-#view.sat #vec .sv.dry { fill: #fff; fill-opacity: 0.75; }
-#view.sat #vec .sv { stroke: #000; stroke-width: 1px; }
-#view.sat #vec .sv.sel { stroke: #ffd400; stroke-width: 3px; }
 #vec .rt, #vec .rt-case { fill: none; stroke: var(--bg); stroke-width: 9px; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; pointer-events: none; }
 #vec .rt { fill: none; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 #vec .rt.total { stroke: var(--st-critical); stroke-width: 6px; }
@@ -86,7 +77,10 @@ body.mapa { height: 100dvh; display: flex; flex-direction: column; overflow: hid
 #vec text { font: 11px var(--mono); fill: var(--ink); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
 #vec .riv { fill: none; stroke: #4aa3ff; stroke-width: 1.6; stroke-opacity: 0.75; stroke-linejoin: round; pointer-events: none; }
 #vec .riv.obs { stroke: var(--ink-3); stroke-dasharray: 6 5; stroke-opacity: 0.8; }
+#vec .riv.cau { stroke-width: 1.1; stroke-opacity: 0.6; }
+#view.sat #vec .riv.cau { stroke-opacity: 0.8; }
 #vec .gd { fill: var(--bg); stroke: var(--ink-2); stroke-width: 1.5px; cursor: default; }
+#vec .gd.pna { stroke-width: 1.2px; }
 #view.sat #vec .gd { fill: #000; stroke: #fff; }
 #view.sat #vec .riv.obs { stroke: #fff; }
 #vec .st-pt { fill: var(--bg); stroke: var(--ink); stroke-width: 1.5; pointer-events: none; }
@@ -95,12 +89,15 @@ body.mapa { height: 100dvh; display: flex; flex-direction: column; overflow: hid
 #vec .bp-halo.off { display: none; }
 #vec .bp.dot { fill: none; stroke-linecap: round; pointer-events: stroke; }
 #vec .bp.poly { stroke-width: 1.6; stroke-linejoin: round; fill-opacity: 0.28; pointer-events: all; }
-#vec .bp.dry { stroke: var(--ink); } #vec .bp.dot.dry { stroke-opacity: 0.75; } #vec .bp.poly.dry { fill: var(--ink); }
+/* sin inundación en la fecha elegida: el color es la altura sobre el agua (violeta oscuro = bajo, claro = alto) */
+#vec .bp.dry, #vec .bp.na { --lv: #5b21b6; --lo: 0.9; stroke: var(--lv); stroke-opacity: var(--lo); }
+#vec .bp.poly.dry, #vec .bp.poly.na { fill: var(--lv); fill-opacity: 0.22; }
+#vec .bp.l0 { --lv: #4c1d95; --lo: 0.95; } #vec .bp.l1 { --lv: #7c3aed; --lo: 0.9; } #vec .bp.l2 { --lv: #a78bfa; --lo: 0.85; }
+#vec .bp.l3 { --lv: #c4b5fd; --lo: 0.75; } #vec .bp.l4 { --lv: #ddd6fe; --lo: 0.55; } #vec .bp.lx { --lv: var(--ink-3); --lo: 0.4; }
 #vec .bp.near { stroke: var(--st-warning); } #vec .bp.poly.near { fill: var(--st-warning); fill-opacity: 0.4; }
 #vec .bp.wet { stroke: var(--st-critical); } #vec .bp.poly.wet { fill: var(--st-critical); fill-opacity: 0.5; }
-#vec .bp.na { stroke: var(--ink-3); stroke-opacity: 0.45; } #vec .bp.poly.na { fill: var(--ink-3); fill-opacity: 0.12; }
 #vec .bp.sel { stroke: #ffd400; stroke-width: 3; }
-#view.sat #vec .bp.dry { stroke: #fff; } #view.sat #vec .bp.poly.dry { fill: #fff; fill-opacity: 0.14; }
+#view.sat #vec .bp.l3 { --lv: #ddd6fe; --lo: 0.6; } #view.sat #vec .bp.l4 { --lv: #ede9fe; --lo: 0.35; } #view.sat #vec .bp.poly.dry, #view.sat #vec .bp.poly.na { fill-opacity: 0.3; }
 #view.sat #vec .riv { stroke: #8fd0ff; }
 #view.sat #vec text { fill: #fff; stroke: #000; }
 #view.sat #vec .st-pt { fill: #000; stroke: #fff; }
@@ -115,3 +112,11 @@ body.mapa { height: 100dvh; display: flex; flex-direction: column; overflow: hid
   #timebar { bottom: 26px; }
   .attrib { font-size: 10px; }
 }
+#vec .loc-pt { fill: var(--ink-2); stroke: var(--bg); stroke-width: 1px; }
+#vec .loc text { font-size: 10.5px; fill: var(--ink-2); }
+#view.sat #vec .loc-pt { fill: #fff; stroke: #000; }
+#view.sat #vec .loc text { fill: #fff; }
+.grad { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+.gbar { flex: 1; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #4c1d95, #7c3aed, #a78bfa, #c4b5fd, #ddd6fe); }
+.lg-note { margin: 0 0 6px; }
+#view.sat #vec .bp-halo { stroke: #000; opacity: 0.35; }

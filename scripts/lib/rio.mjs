@@ -58,6 +58,10 @@ export async function createRio() {
     const n0 = Math.max(0, t.km.findIndex((k) => k >= (TRIB_FROM_KM[id] ?? 0)));
     stems[id] = { c: t.c.slice(n0, n), km: t.km.slice(n0, n) };
   }
+  // cauces menores (scripts/build-cauces.mjs): ríos chicos con boyas del INA. Se identifican con el prefijo "c:"
+  let cauces = [];
+  try { cauces = JSON.parse(await readFile(root('public/cauces.json'), 'utf8')).cauces; } catch {}
+  for (const c of cauces) stems['c:' + c.id] = { c: c.c, km: c.km };
   const river = [];
   for (const [name, s] of Object.entries(stems)) s.c.forEach((c, i) => river.push({ river: name, c, km: s.km[i], i }));
   const stations = [
@@ -65,12 +69,15 @@ export async function createRio() {
     ...st.uruguay.map((s) => ({ id: s.id, river: 'uruguay', km: geo.stationKm[s.id] })),
     ...['bermejo', 'paraguay_formosa', 'paraguay_clorinda'].filter((id) => geo.stationKm[id] != null && stems[id.split('_')[0]])
       .map((id) => ({ id, river: id.split('_')[0], km: geo.stationKm[id] })),
+    ...cauces.flatMap((c) => c.gauges.map((g) => ({ id: g.id, river: 'c:' + c.id, km: g.km }))),
   ].filter((s) => s.km != null);
 
   // punto más cercano de la poligonal (por segmentos, no solo por vértices)
-  function nearestRiver(p) {
+  // kind: 'main' (Paraná, Uruguay, Paraguay, Bermejo), 'cauce' (ríos menores) o todos
+  function nearestRiver(p, kind) {
     let best = { d: Infinity };
     for (const name of Object.keys(stems)) {
+      if (kind && name.startsWith('c:') !== (kind === 'cauce')) continue;
       const L = stems[name].c, K = stems[name].km;
       for (let i = 0; i < L.length - 1; i++) {
         const [x0, y0] = L[i], [x1, y1] = L[i + 1];
@@ -129,5 +136,5 @@ export async function createRio() {
     return a.ref + (b.ref - a.ref) * Math.max(0, Math.min(1, t));
   };
 
-  return { dist, nearestRiver, stationFor, elevations, refAt };
+  return { dist, nearestRiver, stationFor, elevations, refAt, cauces };
 }

@@ -4,7 +4,6 @@
 // entrada en LAYERS (raster por mosaicos) o dibujar en la capa vectorial.
 import { createRise } from './rise.js';
 import { createRutas, CLS, TXT } from './rutas.js';
-import { createServicios, KIND } from './servicios.js';
 
 const $ = (s) => document.querySelector(s);
 const NS = 'http://www.w3.org/2000/svg';
@@ -25,13 +24,14 @@ const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 const json = (u) => fetch(u).then((r) => (r.ok ? r.json() : Promise.reject(new Error(u))));
 
 // ---------- datos
-const [data, extras, ratingsDoc, barrios, geo, srvDoc, munDoc] = await Promise.all([
+const [data, extras, ratingsDoc, barrios, geo, cauDoc, pDoc, munDoc] = await Promise.all([
   json('/api/data'),
   json('/api/extras').catch(() => ({})),
   json('/ratings.json').catch(() => ({})),
   json('/barrios.json'),
   json('geo.json'),
-  json('/servicios.json').catch(() => null),
+  json('/cauces.json').catch(() => null),
+  json('/puertos.json').catch(() => null),
   json('/municipios.json').catch(() => null),
 ]).catch((e) => {
   $('#stage').insertAdjacentHTML('afterbegin', '<p class="float" style="top:50px;left:10px;padding:8px 12px">No se pudieron cargar los datos. Probá de nuevo en un minuto.</p>');
@@ -41,8 +41,10 @@ const rise = createRise({ data, extras, ratings: ratingsDoc.estaciones || {} });
 const days = data.days;
 // las dos escalas del Paraguay (altura medida) no son puntos de caudal del monitor: tienen nombre propio
 const byId = { ...rise.byId, paraguay_formosa: { name: 'Formosa (río Paraguay)' }, paraguay_clorinda: { name: 'Puerto Pilcomayo (río Paraguay)' } };
-const monitorId = (st) => (st.startsWith('paraguay_') ? 'paraguay' : st);
-const obsNote = (st) => (rise.isObs(st) ? '<p class="small muted">Río Paraguay: la estimación usa la altura medida por Prefectura, sin pronóstico; solo hay valor para los días con medición.</p>' : '');
+// ríos menores con boya del INA (scripts/build-cauces.mjs): cada boya tiene nombre propio y no figura en el monitor
+const CAUCES = cauDoc?.cauces ?? [];
+for (const c of CAUCES) for (const g of c.gauges) byId[g.id] = { name: `${c.name} · ${g.place}`, cauce: true };
+const monitorId = (st) => (byId[st]?.cauce ? null : st.startsWith('paraguay_') ? 'paraguay' : st);
 const TODAY_AR = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 let todayIdx = days.findLastIndex((d) => d <= TODAY_AR);
 if (todayIdx < 0) todayIdx = 0;
@@ -143,12 +145,18 @@ const LAYERS = {
 };
 
 // ---------- capa vectorial: ríos, puntos de caudal y barrios
-const gRiv = el('g', {}, vec), gPts = el('g', {}, vec), gRut = el('g', {}, vec), gBar = el('g', {}, vec), gHot = el('g', {}, vec), gSrv = el('g', {}, vec), gLab = el('g', {}, vec); // gHot: los barrios afectados, siempre por encima
+const gLoc = el('g', {}, vec), gRiv = el('g', {}, vec), gPts = el('g', {}, vec), gRut = el('g', {}, vec), gBar = el('g', {}, vec), gHot = el('g', {}, vec), gLab = el('g', {}, vec); // gHot: los barrios afectados, siempre por encima
 const rivPaths = Object.values(geo.stems).map((st) => ({ c: st.c, n: el('path', { class: 'riv' }, gRiv) }));
+for (const c of CAUCES) rivPaths.push({ c: c.c, n: el('path', { class: 'riv cau' }, gRiv) });
 for (const [id, t] of Object.entries(geo.tribs || {})) rivPaths.push({ c: t.c, n: el('path', { class: id === 'pilcomayo' ? 'riv obs' : 'riv' }, gRiv) });
 // estaciones de altura del INA con ubicación propia (Bermejo y Pilcomayo): puntos con su lectura de hoy
-const GAUGES = (extras.heights?.stations ?? []).filter((r) => r.lat != null && r.lon != null && r.height_m != null);
-const gdNodes = GAUGES.map((r, i) => el('circle', { class: 'gd', r: 4.5, 'data-i': i }, gPts));
+// Las escalas de Prefectura (republicadas por el INA) traen su ubicación en puertos.json; las boyas del INA, en la propia lectura.
+const PUERTO = Object.fromEntries((pDoc?.puertos ?? []).map((p) => [`${p.port}|${p.river}`, p]));
+const GAUGES = (extras.heights?.stations ?? []).map((r) => {
+  const p = r.lat == null ? PUERTO[`${r.port}|${r.river}`] : null;
+  return p ? { ...r, lat: p.lat, lon: p.lon, alert_m: r.alert_m ?? p.alert ?? null, evac_m: r.evac_m ?? p.evac ?? null, pna: true } : r;
+}).filter((r) => r.lat != null && r.lon != null && r.height_m != null);
+const gdNodes = GAUGES.map((r, i) => el('circle', { class: 'gd' + (r.pna || r.grp === 'pna' ? ' pna' : ''), r: 4.5, 'data-i': i }, gPts));
 const stPts = data.stations.filter((s) => s.kind === 'main' || s.id === 'bermejo' || s.id === 'paraguay').map((s) => ({
   s, dot: el('circle', { class: 'st-pt', r: 3.5 }, gPts), txt: el('text', { dy: -7, 'text-anchor': 'middle' }, gPts),
 }));
@@ -160,31 +168,70 @@ const stateOf = (b, t) => {
   const r = rise.riseAt(b.st, t);
   return r == null || b.x ? 'na' : r >= b.h ? 'wet' : r >= b.h - NEAR_M ? 'near' : 'dry';
 };
+// altura sobre el agua más cercana → tramo del gradiente (l0 el más bajo); sin dato confiable: lx
+const lvOf = (b) => (b.x ? 'lx' : b.h < 2 ? 'l0' : b.h < 4 ? 'l1' : b.h < 7 ? 'l2' : b.h < 12 ? 'l3' : 'l4');
 const nodes = BAR.map((b, i) => {
   const halo = el('path', { class: 'bp-halo off' }, gBar);
-  const n = el('path', { class: 'bp na dot', 'data-i': i }, gBar);
-  return { b, halo, n, mode: '', st: 'na', vis: false, d: '' };
+  const n = el('path', { class: `bp na ${lvOf(b)} dot`, 'data-i': i }, gBar);
+  return { b, halo, n, lv: lvOf(b), mode: '', st: 'na', vis: false, d: '' };
 });
 // diámetro del punto: crece con las familias y, de lejos, se achica para que no se amontonen
 const diam = (b) => clamp(6 + Math.sqrt(b.fam || 20) / 2, 6, 15) * (0.4 + 0.6 * clamp((V.z - 5.5) / 5, 0, 1));
 let selected = -1, labels = [];
-let selRoad = -1, selSrv = -1;
-const SRV = srvDoc ? createServicios({ doc: srvDoc, parent: gSrv, el, riseAt: rise.riseAt, nDays: days.length }) : null;
-if (!SRV) $('#c-srv').closest('label').hidden = true;
+let selRoad = -1;
 // estado oficial de las rutas nacionales (Vialidad Nacional); las provinciales no figuran
 const EST = extras.rutasEstado || null;
 const RUT = EST ? createRutas({ alertas: EST.alertas, parent: gRut, el }) : null;
 if (!EST) $('#c-rut').closest('label').hidden = true;
 if (!RUT) $('#c-rut').closest('label').hidden = true;
+// ---------- localidades: gobiernos locales de las seis provincias (población del Censo 2022) y las ciudades vecinas de las otras
+// orillas (población aproximada, solo para ordenar). Criterio: cuanto más cerca el zoom, más chica la población mínima.
+const VECINAS = [
+  ['Asunción', -57.576, -25.264, 520000], ['Ciudad del Este', -54.611, -25.510, 300000], ['Foz do Iguaçu', -54.585, -25.516, 260000],
+  ['Encarnación', -55.867, -27.331, 130000], ['Uruguaiana', -57.088, -29.755, 125000], ['Salto', -57.967, -31.383, 105000],
+  ['Paysandú', -58.076, -32.321, 76000], ['Concepción', -57.434, -23.406, 75000], ['Villa Hayes', -57.525, -25.091, 65000],
+  ['São Borja', -56.004, -28.660, 60000], ['Mercedes', -58.031, -33.252, 42000], ['Itaqui', -56.553, -29.125, 38000],
+  ['Pilar', -58.305, -26.859, 35000], ['Fray Bentos', -58.300, -33.117, 25000], ['Ayolas', -56.883, -27.383, 15000],
+  ['Bella Unión', -57.598, -30.259, 12000], ['Nueva Palmira', -58.418, -33.877, 9000],
+];
+const LOC = [...(munDoc?.municipios ?? []).filter((m) => m.c && m.pob).map((m) => ({ n: m.n, lon: m.c[0], lat: m.c[1], pob: m.pob })),
+  ...VECINAS.map(([n, lon, lat, pob]) => ({ n, lon, lat, pob }))].sort((a, b) => b.pob - a.pob);
+const locMin = (z) => (z < 6.5 ? 150e3 : z < 7.5 ? 50e3 : z < 8.5 ? 20e3 : z < 9.5 ? 8e3 : z < 10.5 ? 3e3 : z < 11.5 ? 1e3 : 0);
+const locNodes = [];
+function renderLoc(s) {
+  const on = $('#c-loc').checked;
+  gLoc.style.display = on ? '' : 'none';
+  if (!on) return;
+  const min = locMin(V.z), boxes = [];
+  let k = 0;
+  for (const m of LOC) {
+    if (m.pob < min) break; // ordenadas por población
+    const x = sx(m.lon, s), y = sy(m.lat, s);
+    if (x < -20 || x > W + 20 || y < -20 || y > H + 20) continue;
+    const w = m.n.length * 6.3 + 12, box = [x - 4, y - 8, x + w, y + 6];
+    if (boxes.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) continue; // se pisa con una más grande
+    boxes.push(box);
+    if (k >= 160) break;
+    let o = locNodes[k];
+    if (!o) o = locNodes[k] = { c: el('circle', { r: 2.2, class: 'loc-pt' }, gLoc), t: el('text', { dy: 3.5 }, gLoc) };
+    o.c.style.display = o.t.style.display = '';
+    o.c.setAttribute('cx', x.toFixed(1)); o.c.setAttribute('cy', y.toFixed(1));
+    o.t.setAttribute('x', (x + 5).toFixed(1)); o.t.setAttribute('y', y.toFixed(1));
+    if (o.t.textContent !== m.n) o.t.textContent = m.n;
+    k++;
+  }
+  for (; k < locNodes.length; k++) locNodes[k].c.style.display = locNodes[k].t.style.display = 'none';
+}
 function renderVec() {
   const s = scale(), on = $('#c-riv').checked;
+  renderLoc(s);
   // la traza de los ríos es esquemática: de cerca la imagen satelital muestra el río real y la línea desentona
   gRiv.style.display = on && V.z < 9.5 ? '' : 'none';
   gPts.style.display = on ? '' : 'none';
   if (on) {
     for (const r of rivPaths) r.n.setAttribute('d', r.c.map((p, i) => `${i ? 'L' : 'M'}${sx(p[0], s).toFixed(1)},${sy(p[1], s).toFixed(1)}`).join(''));
     GAUGES.forEach((r, i) => {
-      const x = sx(r.lon, s), y = sy(r.lat, s), vis = x > -10 && x < W + 10 && y > -10 && y < H + 10;
+      const x = sx(r.lon, s), y = sy(r.lat, s), vis = x > -10 && x < W + 10 && y > -10 && y < H + 10 && (V.z >= 7 || !(r.pna || r.grp === 'pna'));
       gdNodes[i].style.display = vis ? '' : 'none';
       if (vis) { gdNodes[i].setAttribute('cx', x.toFixed(1)); gdNodes[i].setAttribute('cy', y.toFixed(1)); }
     });
@@ -198,10 +245,6 @@ function renderVec() {
     gRut.style.display = $('#c-rut').checked ? '' : 'none';
     if ($('#c-rut').checked) RUT.render({ X: (lon) => sx(lon, s), Y: (lat) => sy(lat, s), W, H });
   }
-  if (SRV) { // se ven al acercarse: de lejos serían una nube de puntos
-    const s2 = scale();
-    SRV.render({ X: (lon) => sx(lon, s2), Y: (lat) => sy(lat, s2), W, H, show: $('#c-srv').checked && V.z >= 8.5 });
-  }
   gBar.style.display = gHot.style.display = $('#c-bar').checked ? '' : 'none';
   if (!$('#c-bar').checked) { gLab.replaceChildren(); labels = []; return; }
   const lonL = V.lon - W / 2 / (s * COS), lonR = V.lon + W / 2 / (s * COS), latT = V.lat + H / 2 / s, latB = V.lat - H / 2 / s;
@@ -214,7 +257,7 @@ function renderVec() {
     if (!o.vis) { o.n.style.display = ''; o.vis = true; }
     const w = (bb[2] - bb[0]) * s * COS, h = (bb[3] - bb[1]) * s;
     const mode = Math.max(w, h) < 9 ? 'dot' : 'poly';
-    if (mode !== o.mode) { o.mode = mode; o.n.setAttribute('class', `bp ${o.st} ${mode}${o.b === BAR[selected] ? ' sel' : ''}`); o.halo.classList.toggle('off', mode === 'poly'); }
+    if (mode !== o.mode) { o.mode = mode; o.n.setAttribute('class', `bp ${o.st} ${o.lv} ${mode}${o.b === BAR[selected] ? ' sel' : ''}`); o.halo.classList.toggle('off', mode === 'poly'); }
     if (mode === 'dot') {
       const x = sx(b.c[0], s).toFixed(1), y = sy(b.c[1], s).toFixed(1), D = diam(b);
       const d = `M${x},${y}h0.02`;
@@ -248,72 +291,32 @@ function updateStates() {
     const st = stateOf(o.b, T);
     c[st][0]++; c[st][1] += o.b.fam || 0;
     if (st !== o.st) {
-      o.st = st; o.n.setAttribute('class', `bp ${st} ${o.mode || 'dot'}${o.b === BAR[selected] ? ' sel' : ''}`);
+      o.st = st; o.n.setAttribute('class', `bp ${st} ${o.lv} ${o.mode || 'dot'}${o.b === BAR[selected] ? ' sel' : ''}`);
       const g = st === 'wet' || st === 'near' ? gHot : gBar;
       if (o.n.parentNode !== g) { g.appendChild(o.halo); g.appendChild(o.n); }
     }
   }
-  const fm = (a) => nf.format(a);
-  $('#bar-sum').innerHTML = `<ul class="bar-keys">` +
-    `<li><span class="bar-ico wet"></span><span><b>${fm(c.wet[1])}</b> familias en <b>${fm(c.wet[0])}</b> barrios con inundación probable</span></li>` +
-    `<li><span class="bar-ico near"></span><span><b>${fm(c.near[1])}</b> familias en <b>${fm(c.near[0])}</b> barrios con inundación posible</span></li>` +
-    `<li><span class="bar-ico"></span><span>${fm(c.dry[0])} barrios con inundación poco probable</span></li>` +
-    `<li><span class="bar-ico na"></span><span class="muted">${fm(c.na[0])} sin estimación</span></li></ul>` +
-    `<details class="help"><summary class="muted small">cómo se estima</summary><p class="muted small">Estimación, no un aviso oficial. La altura de cada barrio sobre el río sale del terreno (SRTM, 30 m) y puede errar varios metros. La subida del río, del caudal del modelo GloFAS o del pronóstico del INA donde lo hay, respecto de su nivel mediano. No cuenta defensas, desagües ni lluvia local. Sin estimación: Paraná arriba de Yacyretá (depende de las represas), el Delta (marea), el Pilcomayo (cauce cambiante) y el Bermejo aguas arriba de Puerto Lavalle (río de piedemonte). El Paraguay se estima con la altura medida por Prefectura, sin pronóstico (solo hasta hoy); el Bermejo bajo, con el modelo de caudal.</p></details>`;
-  if (SRV) {
-    SRV.update(T);
-    $('#srv-sum').innerHTML = '<p class="legend-line small muted"><span class="bar-ico wet"></span> probable <span class="bar-ico near"></span> posible · pasá el cursor sobre cada uno</p>';
-  }
+  const fm = (a) => nf.format(a), hit = c.wet[0] + c.near[0];
+  $('#bar-sum').innerHTML =
+    `<div class="grad"><span class="muted small">más bajo</span><i class="gbar"></i><span class="muted small">más alto</span></div><p class="small muted lg-note">altura sobre el agua más cercana</p>` +
+    `<p class="legend-line small"><span class="bar-ico wet"></span> el río lo alcanza <span class="bar-ico near"></span> le falta menos de 1 m</p>` +
+    (hit ? `<p class="small"><b>${fm(c.wet[0])}</b> barrios (<b>${fm(c.wet[1])}</b> familias) con inundación probable en esta fecha${c.near[0] ? `, <b>${fm(c.near[0])}</b> más con inundación posible` : ''}.</p>` : '<p class="small muted">En esta fecha el río no alcanza a ningún barrio.</p>') +
+    `<details class="help"><summary class="muted small">cómo se estima</summary><p class="muted small">Estimación, no un aviso oficial. El color es la altura del barrio sobre el agua más cercana, que sale del terreno (SRTM, 30 m) y puede errar varios metros. Cuando el río sube hasta esa altura, el barrio se marca en naranja o rojo: la subida sale del caudal del modelo GloFAS, del pronóstico del INA donde lo hay o, en el Paraguay y los ríos menores, de la altura medida hasta hoy. No cuenta defensas, desagües ni lluvia local. Sin estimación del río: Paraná arriba de Yacyretá (depende de las represas), el Delta (marea), el Pilcomayo y el Bermejo aguas arriba de Puerto Lavalle.</p></details>`;
   if (selected >= 0) drawCard();
-  if (selSrv >= 0) drawSrvCard();
 }
 
-// ---------- municipio de un barrio (Registro Federal de Gobiernos Locales)
-const MUNI = munDoc ? munDoc.municipios.map((m) => ({ ...m, nn: norm(m.n), np: norm(m.p) })) : [];
-function muniOf(b) {
-  if (!MUNI.length) return null;
-  const p = norm(b.prov), l = norm(b.loc), d = norm(b.dep), en = MUNI.filter((m) => m.np === p);
-  return en.find((m) => m.nn === l) || en.find((m) => m.nn === d) ||
-    en.map((m) => [m, m.c ? Math.hypot((m.c[0] - b.c[0]) * 0.87, m.c[1] - b.c[1]) * 111 : 1e9]).filter((x) => x[1] <= 15).sort((a, b2) => a[1] - b2[1])[0]?.[0] || null;
-}
-function muniHtml(b) {
-  const m = muniOf(b);
-  if (!m) return '';
-  const web = m.web ? (/^https?:/i.test(m.web) ? m.web : 'https://' + m.web) : null;
-  return `<p class="small"><b>Municipio de ${esc(m.n)}</b>${m.pob != null ? ` · ${nf.format(m.pob)} hab. <span class="muted">(Censo 2022)</span>` : ''}</p>` +
-    (m.inu != null ? `<p class="small">Inundaciones reportadas entre 1999 y 2022: <b>${m.inu}</b> <span class="muted">(según el registro de gobiernos locales)</span></p>` : '') +
-    (m.tel || web ? `<p class="small">${m.tel ? `Tel. ${esc(m.tel)}` : ''}${m.tel && web ? ' · ' : ''}${web ? `<a href="${esc(web)}" target="_blank" rel="noopener">sitio del municipio</a>` : ''}</p>` : '');
-}
-
-// ---------- ficha del barrio elegido
-const WORD = { wet: 'inundación probable', near: 'inundación posible (al río le falta menos de 1 m)', dry: 'inundación poco probable', na: 'sin estimación' };
-// tira de colores con el estado de cada día; la raya negra es hoy y la amarilla, la fecha elegida
-function stripSvg(cells) {
-  const N = cells.length;
-  return `<svg class="strip" viewBox="0 0 ${N} 22" preserveAspectRatio="none" aria-hidden="true">` +
-    cells.map((s, t) => `<rect class="${s}" x="${t}" y="4" width="1.02" height="14"/>`).join('') +
-    `<line class="now" x1="${todayIdx + 0.5}" x2="${todayIdx + 0.5}" y1="0" y2="22"/><line class="now" style="stroke:var(--accent)" x1="${T + 0.5}" x2="${T + 0.5}" y1="2" y2="20"/></svg>`;
-}
+// ---------- ficha del barrio elegido (corta)
+const WORD = { wet: 'inundación probable', near: 'inundación posible (al río le falta menos de 1 m)', dry: 'inundación poco probable', na: 'sin estimación del río' };
 function drawCard() {
   const b = BAR[selected], card = $('#card');
   if (!b) { card.hidden = true; return; }
-  const st = stateOf(b, T), r = rise.riseAt(b.st, T), sta = byId[b.st];
-  let first = null;
-  const cells = days.map((_, t) => stateOf(b, t));
-  for (let t = Math.max(todayIdx, 0); t < days.length; t++) if (cells[t] === 'wet') { first = t; break; }
-  const strip = stripSvg(cells);
+  const st = stateOf(b, T), sta = byId[b.st];
   card.innerHTML = `<button class="btn x" id="card-x" type="button" aria-label="Cerrar">x</button>` +
-    `<p class="kicker">barrio-popular</p><h2>${b.n}</h2><div class="muted">${b.loc || b.dep}, ${b.prov}</div>` +
-    `<dl><dt>Familias</dt><dd>${b.fam != null ? '~' + nf.format(b.fam) : '—'}${b.viv != null ? ` · ${nf.format(b.viv)} viv.` : ''}</dd>` +
-    `<dt>Sobre el río</dt><dd>${b.x ? 'sin dato confiable' : '~' + nf1.format(Math.max(b.h, 0)) + ' m'}</dd>` +
-    `<dt>Punto de caudal</dt><dd>${sta ? sta.name : '—'}</dd>` +
-    `<dt>Río el ${dShort(days[T])}</dt><dd>${r == null ? '—' : (r >= 0 ? '+' : '−') + nf1.format(Math.abs(r)) + ' m vs. mediana'}</dd>` +
-    `<dt>Estado</dt><dd class="st ${st}">${WORD[st]}</dd></dl>` +
-    `<div class="muted small">según el modelo, jun → nov</div>${strip}` +
-    `<p class="small">${first != null ? `Según el modelo, el primer día con inundación probable desde hoy es el <b>${dShort(days[first])}</b>.` : st === 'na' ? 'Sin estimación para este tramo del río.' : 'El modelo no prevé inundación en este barrio durante el período del pronóstico.'}</p>` +
-    muniHtml(b) + obsNote(b.st) +
-    `<p class="small muted">Estimación a partir de un modelo de elevación; no es un aviso oficial.</p>` +
-    (sta ? `<p class="small"><a href="./#${monitorId(b.st)}">ver ${sta.name} en el monitor →</a></p>` : '');
+    `<p class="kicker">barrio-popular</p><h2>${esc(b.n)}</h2><div class="muted">${esc(b.loc || b.dep)}, ${esc(b.prov)}</div>` +
+    `<dl><dt>Familias</dt><dd>${b.fam != null ? '~' + nf.format(b.fam) : '—'}</dd>` +
+    `<dt>Sobre el agua</dt><dd>${b.x ? 'sin dato confiable' : '~' + nf1.format(Math.max(b.h, 0)) + ' m'}</dd>` +
+    `<dt>${dShort(days[T])}</dt><dd class="st ${st}">${WORD[st]}</dd></dl>` +
+    `<p class="small muted">Estimación a partir de un modelo de elevación; no es un aviso oficial.${sta && monitorId(b.st) ? ` <a href="./#${monitorId(b.st)}">${esc(sta.name)} en el monitor →</a>` : ''}</p>`;
   card.hidden = false;
   $('#card-x').addEventListener('click', () => select(-1));
 }
@@ -335,43 +338,13 @@ function drawRoadCard() {
 }
 function selectRoad(i) {
   if (i >= 0) select(-1);
-  if (i >= 0 && selSrv >= 0) { selSrv = -1; if (SRV) SRV.setSel(-1); }
   selRoad = i;
   if (RUT) RUT.setSel(i);
   if (i < 0) $('#card').hidden = true; else drawRoadCard();
   schedule();
 }
-// ---------- ficha de una escuela o un centro de salud
-function drawSrvCard() {
-  const card = $('#card');
-  if (!SRV || selSrv < 0) return;
-  const it = SRV.items[selSrv], st = SRV.state(selSrv, T), sta = byId[it.st], r = rise.riseAt(it.st, T), cells = SRV.strip(selSrv);
-  let first = null;
-  for (let t = Math.max(todayIdx, 0); t < days.length; t++) if (cells[t] === 'wet') { first = t; break; }
-  card.innerHTML = `<button class="btn x" id="card-x" type="button" aria-label="Cerrar">x</button>` +
-    `<p class="kicker">${KIND[it.t].replace(' ', '-')}</p><h2>${esc(it.n)}</h2><div class="muted">${esc(it.g)}</div>` +
-    `<dl><dt>Sobre el río</dt><dd>${it.x ? 'sin dato confiable' : '~' + nf1.format(Math.max(it.h, 0)) + ' m'}</dd>` +
-    `<dt>Punto de caudal</dt><dd>${sta ? sta.name : '—'}</dd>` +
-    `<dt>Río el ${dShort(days[T])}</dt><dd>${r == null ? '—' : (r >= 0 ? '+' : '−') + nf1.format(Math.abs(r)) + ' m vs. mediana'}</dd>` +
-    `<dt>Estado</dt><dd class="st ${st}">${WORD[st]}</dd></dl>` +
-    `<div class="muted small">según el modelo, jun → nov</div>${stripSvg(cells)}` +
-    `<p class="small">${first != null ? `Según el modelo, el primer día con inundación probable desde hoy es el <b>${dShort(days[first])}</b>.` : st === 'na' ? 'Sin estimación para este tramo del río.' : 'El modelo no prevé inundación en este lugar durante el período del pronóstico.'}</p>` +
-    obsNote(it.st) +
-    `<p class="small muted">Estimación a partir de un modelo de elevación; no es un aviso oficial. Ubicación según el IGN (${it.t === 'e' ? 'Mapa Educativo Nacional' : 'SISA, Ministerio de Salud'}).</p>` +
-    (sta ? `<p class="small"><a href="./#${monitorId(it.st)}">ver ${sta.name} en el monitor →</a></p>` : '');
-  card.hidden = false;
-  $('#card-x').addEventListener('click', () => selectSrv(-1));
-}
-function selectSrv(i) {
-  if (i >= 0) select(-1);
-  selSrv = i;
-  if (SRV) SRV.setSel(i);
-  if (i < 0) $('#card').hidden = true; else drawSrvCard();
-  schedule();
-}
 function select(i) {
   if (i >= 0 && selRoad >= 0) { selRoad = -1; if (RUT) RUT.setSel(-1); }
-  if (i >= 0 && selSrv >= 0) { selSrv = -1; if (SRV) SRV.setSel(-1); }
   const prev = BAR[selected] && nodes[selected];
   selected = i;
   if (prev) prev.n.classList.remove('sel');
@@ -383,20 +356,17 @@ function select(i) {
 // ---------- tooltip al pasar sobre un barrio
 const tip = $('#tip');
 function tipOf(b) {
-  const st = stateOf(b, T), r = rise.riseAt(b.st, T);
-  return `<b>${b.n}</b> <span class="muted">· ${b.loc || b.dep}, ${b.prov}</span><br>` +
-    `<div class="row"><span>Familias</span><span><b>${b.fam != null ? '~' + nf.format(b.fam) : '—'}</b></span></div>` +
-    `<div class="row"><span>Sobre el río</span><span>${b.x ? '—' : '~' + nf1.format(Math.max(b.h, 0)) + ' m'}</span></div>` +
-    (r != null ? `<div class="row"><span>Río ${dShort(days[T])}</span><span>${r >= 0 ? '+' : '−'}${nf1.format(Math.abs(r))} m vs. mediana</span></div>` : '') +
-    `<div class="row"><span>Estado</span><span>${WORD[st]}</span></div>`;
+  const st = stateOf(b, T);
+  return `<b>${esc(b.n)}</b> <span class="muted">· ${esc(b.loc || b.dep)}, ${esc(b.prov)}</span><br>` +
+    `<div class="row"><span>Familias</span><span>${b.fam != null ? '~' + nf.format(b.fam) : '—'}</span></div>` +
+    `<div class="row"><span>Sobre el agua</span><span>${b.x ? '—' : '~' + nf1.format(Math.max(b.h, 0)) + ' m'}</span></div>` +
+    (st === 'wet' || st === 'near' ? `<div class="row"><span>${dShort(days[T])}</span><span><b>${st === 'wet' ? 'inundación probable' : 'inundación posible'}</b></span></div>` : '');
 }
 vec.addEventListener('mousemove', (ev) => {
   const g = ev.target.closest?.('.bp');
   if (drag.active) { tip.hidden = true; return; }
   let html = g ? tipOf(BAR[+g.dataset.i]) : null;
-  const sv = !g && SRV ? ev.target.closest?.('.sv') : null;
-  if (sv) html = tipSrv(+sv.dataset.i);
-  const gd = !g && !sv ? ev.target.closest?.('.gd') : null;
+  const gd = !g ? ev.target.closest?.('.gd') : null;
   if (gd) html = tipGauge(+gd.dataset.i);
   if (!html && RUT && $('#c-rut').checked) {
     const rc = view.getBoundingClientRect(), s = scale();
@@ -414,14 +384,10 @@ vec.addEventListener('mousemove', (ev) => {
 const titulo = (t) => t.toLowerCase().replace(/(^|\s)\S/g, (m) => m.toUpperCase());
 function tipGauge(i) {
   const r = GAUGES[i];
-  return `<b>${titulo(r.river)} · ${titulo(r.port)}</b><br>Altura <b>${nf1.format(r.height_m)} m</b>${r.state ? ' · ' + r.state.toLowerCase() : ''}<br>` +
-    `<span class="muted">${r.date}${r.time ? ' ' + r.time : ''} · medición del INA, sin nivel de alerta</span>`;
-}
-function tipSrv(i) {
-  const it = SRV.items[i], st = SRV.state(i, T);
-  return `<b>${esc(it.n)}</b><br><span class="muted">${esc(it.g)}</span><br>` +
-    `<div class="row"><span>Sobre el río</span><span>${it.x ? '—' : '~' + nf1.format(Math.max(it.h, 0)) + ' m'}</span></div>` +
-    `<div class="row"><span>Estado</span><span>${WORD[st]}</span></div>`;
+  const nm = r.port.startsWith(r.river) ? titulo(r.port) : `${titulo(r.river)} · ${titulo(r.port)}`;
+  return `<b>${nm}</b><br>Altura <b>${nf1.format(r.height_m)} m</b>${r.state ? ' · ' + r.state.toLowerCase() : ''}<br>` +
+    (r.alert_m != null ? `<div class="row"><span>Alerta / evacuación</span><span>${nf1.format(r.alert_m)} / ${r.evac_m != null ? nf1.format(r.evac_m) : '—'} m</span></div>` : '') +
+    `<span class="muted">${r.date}${r.time ? ' ' + r.time : ''} · ${r.pna || r.grp === 'pna' ? 'escala de Prefectura, vía INA' : 'medición del INA'}${r.alert_m == null ? ', sin nivel de alerta' : ''}</span>`;
 }
 function tipRoad(ri) {
   const a = RUT.info(ri);
@@ -529,8 +495,6 @@ view.addEventListener('click', (ev) => {
   if (drag.moved) { drag.moved = false; return; }
   const g = ev.target.closest?.('.bp');
   if (g) { select(+g.dataset.i); return; }
-  const sv = SRV ? ev.target.closest?.('.sv') : null;
-  if (sv) { selectSrv(+sv.dataset.i); return; }
   if (RUT && $('#c-rut').checked) {
     const rc = view.getBoundingClientRect(), s = scale();
     const ri = RUT.hit(ev.clientX - rc.left, ev.clientY - rc.top, { X: (lon) => sx(lon, s), Y: (lat) => sy(lat, s) }, 12);
@@ -587,8 +551,8 @@ if (matchMedia('(max-width: 760px)').matches) $('#layers details').open = false;
 $('#c-sat').addEventListener('change', (ev) => { LAYERS.sat.on = ev.target.checked; schedule(); });
 $('#c-bar').addEventListener('change', schedule);
 $('#c-riv').addEventListener('change', schedule);
+$('#c-loc').addEventListener('change', schedule);
 $('#c-rut').addEventListener('change', schedule);
-$('#c-srv').addEventListener('change', schedule);
 // ---------- búsqueda de barrio o localidad
 const q = $('#q'), res = $('#q-res');
 let results = [], cur = -1;

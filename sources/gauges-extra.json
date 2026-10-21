@@ -1,0 +1,397 @@
+{
+ "CORRIENTE - PASO LUCERO": {
+  "id": 9021,
+  "river": "CORRIENTE",
+  "lat": -28.995,
+  "lon": -58.5583,
+  "grp": "cauce"
+ },
+ "CORRIENTE - LOS LAURELES": {
+  "id": 6756,
+  "river": "CORRIENTE",
+  "lat": -29.7572,
+  "lon": -59.2172,
+  "grp": "cauce"
+ },
+ "SANTA LUCIA - SANTA LUCIA": {
+  "id": 9108,
+  "river": "SANTA LUCIA",
+  "lat": -28.9878,
+  "lon": -59.0906,
+  "grp": "cauce"
+ },
+ "MIRINAY - PASO MESA": {
+  "id": 9542,
+  "river": "MIRINAY",
+  "lat": -28.9167,
+  "lon": -57.2364,
+  "grp": "cauce"
+ },
+ "MIRINAY - PASO LEDESMA": {
+  "id": 6897,
+  "river": "MIRINAY",
+  "lat": -29.8458,
+  "lon": -57.675,
+  "grp": "cauce"
+ },
+ "BATEL - PASO CERRITO": {
+  "id": 6806,
+  "river": "BATEL",
+  "lat": -29.0311,
+  "lon": -58.7883,
+  "grp": "cauce"
+ },
+ "AGUAPEY - LA SIRENA": {
+  "id": 9018,
+  "river": "AGUAPEY",
+  "lat": -28.4167,
+  "lon": -56.5422,
+  "grp": "cauce"
+ },
+ "MOCORETA - RN 127": {
+  "id": 33259,
+  "river": "MOCORETA",
+  "lat": -30.1083,
+  "lon": -58.0589,
+  "grp": "cauce"
+ },
+ "GUALEGUAY - VILLAGUAY": {
+  "id": 6833,
+  "river": "GUALEGUAY",
+  "lat": -31.8017,
+  "lon": -59.1261,
+  "grp": "cauce"
+ },
+ "GUALEGUAY - ROSARIO DEL TALA": {
+  "id": 6706,
+  "river": "GUALEGUAY",
+  "lat": -32.3086,
+  "lon": -59.0769,
+  "grp": "cauce"
+ },
+ "GUALEGUAY - PASO ALONSO": {
+  "id": 9550,
+  "river": "GUALEGUAY",
+  "lat": -33.1006,
+  "lon": -59.2703,
+  "grp": "cauce"
+ },
+ "NOGOYA - RN 12": {
+  "id": 9412,
+  "river": "NOGOYA",
+  "lat": -32.3947,
+  "lon": -59.7639,
+  "grp": "cauce"
+ },
+ "FELICIANO - PASO MEDINA": {
+  "id": 6807,
+  "river": "FELICIANO",
+  "lat": -30.9236,
+  "lon": -59.5511,
+  "grp": "cauce"
+ },
+ "GUAYQUIRARO - CURUPI": {
+  "id": 34086,
+  "river": "GUAYQUIRARO",
+  "lat": -30.3511,
+  "lon": -59.5147,
+  "grp": "cauce"
+ },
+ "RIACHUELO - RP 5": {
+  "id": 9551,
+  "river": "RIACHUELO",
+  "lat": -27.5106,
+  "lon": -58.5697,
+  "grp": "cauce"
+ },
+ "NEGRO - OBRA DE CONTROL": {
+  "id": 32633,
+  "river": "NEGRO",
+  "lat": -27.4564,
+  "lon": -58.8989,
+  "grp": "cauce"
+ },
+ "PIRAY GUAZU - RN 12": {
+  "id": 32261,
+  "river": "PIRAY GUAZU",
+  "lat": -26.4858,
+  "lon": -54.5883,
+  "grp": "cauce"
+ },
+ "PIRAY MINI - VALLE HERMOSO": {
+  "id": 32868,
+  "river": "PIRAY MINI",
+  "lat": -26.355,
+  "lon": -54.4983,
+  "grp": "cauce"
+ },
+ "COLASTINE - RN 168": {
+  "id": 8313,
+  "river": "COLASTINE",
+  "lat": -31.6611,
+  "lon": -60.6019,
+  "grp": "cauce"
+ },
+ "COLASTINE - AUTOPISTA": {
+  "id": 6856,
+  "river": "COLASTINE",
+  "lat": -32.0178,
+  "lon": -60.9903,
+  "grp": "cauce"
+ },
+ "LEYES - RP 1": {
+  "id": 9199,
+  "river": "LEYES",
+  "lat": -31.4947,
+  "lon": -60.425,
+  "grp": "cauce"
+ },
+ "CORONDA - CORONDA": {
+  "id": 6755,
+  "river": "CORONDA",
+  "lat": -31.9742,
+  "lon": -60.9139,
+  "grp": "cauce"
+ },
+ "MALABRIGO - RN 11": {
+  "id": 34340,
+  "river": "MALABRIGO",
+  "lat": -29.2789,
+  "lon": -59.7864,
+  "grp": "cauce"
+ },
+ "LAS GARZAS - RN 11": {
+  "id": 32023,
+  "river": "LAS GARZAS",
+  "lat": -28.7767,
+  "lon": -59.4739,
+  "grp": "cauce"
+ },
+ "BARRANCAS - PASO LA LLANA": {
+  "id": 9200,
+  "river": "BARRANCAS",
+  "lat": -30.2172,
+  "lon": -59.3244,
+  "grp": "cauce"
+ },
+ "ESCOBAR": {
+  "id": 42,
+  "river": "DELTA",
+  "lat": -34.3,
+  "lon": -58.7333,
+  "grp": "pna",
+  "alert": 3,
+  "evac": 3.5
+ },
+ "CANAL NUEVO": {
+  "id": 44,
+  "river": "DELTA",
+  "lat": -33.8627,
+  "lon": -58.6604,
+  "grp": "pna",
+  "alert": 2.85,
+  "evac": 3
+ },
+ "IBICUY": {
+  "id": 45,
+  "river": "DELTA",
+  "lat": -33.762,
+  "lon": -59.1801,
+  "grp": "pna",
+  "alert": 2,
+  "evac": 2.3
+ },
+ "PUERTO RUIZ": {
+  "id": 46,
+  "river": "DELTA",
+  "lat": -33.2167,
+  "lon": -59.3667,
+  "grp": "pna",
+  "alert": 4.5,
+  "evac": 5
+ },
+ "MARTIN GARCIA": {
+  "id": 47,
+  "river": "RIO DE LA PLATA",
+  "lat": -34.1903,
+  "lon": -58.253,
+  "grp": "pna",
+  "alert": 2.5,
+  "evac": 5
+ },
+ "GUAZUCITO": {
+  "id": 48,
+  "river": "DELTA",
+  "lat": -34.0167,
+  "lon": -58.4,
+  "grp": "pna",
+  "alert": 2.2,
+  "evac": 2.4
+ },
+ "TIGRE": {
+  "id": 49,
+  "river": "DELTA",
+  "lat": -34.4159,
+  "lon": -58.578,
+  "grp": "pna",
+  "alert": 3.3,
+  "evac": 3.8
+ },
+ "DIQUE LUJAN": {
+  "id": 50,
+  "river": "DELTA",
+  "lat": -34.3516,
+  "lon": -58.6861,
+  "grp": "pna",
+  "alert": 2.3,
+  "evac": 2.8
+ },
+ "CHANA MINI": {
+  "id": 51,
+  "river": "DELTA",
+  "lat": -34.2,
+  "lon": -58.4833,
+  "grp": "pna",
+  "alert": 3.2,
+  "evac": 3.8
+ },
+ "SAN FERNANDO": {
+  "id": 52,
+  "river": "DELTA",
+  "lat": -34.4333,
+  "lon": -58.55,
+  "grp": "pna",
+  "alert": 3,
+  "evac": 3.5
+ },
+ "SAN ISIDRO": {
+  "id": 53,
+  "river": "RIO DE LA PLATA",
+  "lat": -34.4572,
+  "lon": -58.5072,
+  "grp": "pna",
+  "alert": 3,
+  "evac": 3.5
+ },
+ "OLIVOS": {
+  "id": 54,
+  "river": "RIO DE LA PLATA",
+  "lat": -34.5067,
+  "lon": -58.4759,
+  "grp": "pna",
+  "alert": 3,
+  "evac": 3.8
+ },
+ "BOUVIER": {
+  "id": 56,
+  "river": "PARAGUAY",
+  "lat": -25.4519,
+  "lon": -57.5682,
+  "grp": "pna",
+  "alert": 6,
+  "evac": 6.4
+ },
+ "PEPIRI MINI": {
+  "id": 60,
+  "river": "URUGUAY",
+  "lat": -27.1537,
+  "lon": -53.9331,
+  "grp": "pna"
+ },
+ "ALICIA": {
+  "id": 62,
+  "river": "URUGUAY",
+  "lat": -27.4375,
+  "lon": -54.3553,
+  "grp": "pna"
+ },
+ "FEDERACION": {
+  "id": 76,
+  "river": "URUGUAY",
+  "lat": -30.9932,
+  "lon": -57.9147,
+  "grp": "pna",
+  "alert": 3.9,
+  "evac": 4.2
+ },
+ "SALTO GRANDE ARRIBA": {
+  "id": 77,
+  "river": "URUGUAY",
+  "lat": -31.2755,
+  "lon": -57.9369,
+  "grp": "pna",
+  "alert": 35.5,
+  "evac": 36
+ },
+ "PUERTO GUALEGUAYCHU": {
+  "id": 83,
+  "river": "URUGUAY",
+  "lat": -33.0167,
+  "lon": -58.5,
+  "grp": "pna"
+ },
+ "BOCA GUALEGUAYCHU": {
+  "id": 84,
+  "river": "URUGUAY",
+  "lat": -33.0667,
+  "lon": -58.4167,
+  "grp": "pna",
+  "alert": 2.9,
+  "evac": 3.1
+ },
+ "BUENOS AIRES": {
+  "id": 85,
+  "river": "RIO DE LA PLATA",
+  "lat": -34.5611,
+  "lon": -58.3993,
+  "grp": "pna",
+  "alert": 3.3,
+  "evac": 3.9
+ },
+ "LA PLATA": {
+  "id": 86,
+  "river": "RIO DE LA PLATA",
+  "lat": -34.8242,
+  "lon": -57.8735,
+  "grp": "pna",
+  "alert": 2.5,
+  "evac": 2.8
+ },
+ "YACYRETA AFLUENTE": {
+  "id": 87,
+  "river": "PARANA",
+  "lat": -27.4826,
+  "lon": -56.7272,
+  "grp": "pna"
+ },
+ "YACYRETA EFLUENTE": {
+  "id": 88,
+  "river": "PARANA",
+  "lat": -27.4826,
+  "lon": -56.7272,
+  "grp": "pna"
+ },
+ "CONFLUENCIA": {
+  "id": 93,
+  "river": "PARANA",
+  "lat": -25.5927,
+  "lon": -54.5934,
+  "grp": "pna"
+ },
+ "GUALEGUAYCHU": {
+  "id": 99,
+  "river": "URUGUAY",
+  "lat": -33.0144,
+  "lon": -58.5042,
+  "grp": "pna",
+  "alert": 3.5,
+  "evac": 3.8
+ },
+ "FEDERACION EMBALSE": {
+  "id": 5430,
+  "river": "URUGUAY",
+  "lat": -30.9949,
+  "lon": -57.8993,
+  "grp": "pna"
+ }
+}

@@ -291,7 +291,7 @@ for (const st of data.stations) {
 // estaciones de altura del INA con ubicación propia (Bermejo y Pilcomayo): puntos chicos con su lectura de hoy
 const title = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (m) => m.toUpperCase());
 for (const r of extras.heights?.stations ?? []) {
-  if (r.lat == null || r.lon == null || r.height_m == null) continue;
+  if (r.lat == null || r.lon == null || r.height_m == null || r.grp) continue; // los cauces menores solo van en el mapa
   const [gx, gy] = P([r.lon, r.lat]);
   const c = el('circle', { cx: gx, cy: gy, r: 4, class: 'gauge-dot' }, gDots);
   scaled.push([c, 'r', 4]);

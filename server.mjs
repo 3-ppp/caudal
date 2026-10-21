@@ -172,7 +172,7 @@ async function optionalImport(name) {
 // Serie histórica propia de alturas (una lectura por día y puerto). La primera vez se completa
 // con el histórico de 30 días de la fuente (histFn); después se suma cada lectura nueva.
 const HEIGHT_RIVERS = /PARANA|PARAGUAY|IGUAZU|URUGUAY|BERMEJO|PILCOMAYO/;
-async function appendHeightHistory(pref, histFn) {
+async function appendHeightHistory(pref, histFn, maxFetch = 5) {
   const file = path.join(DATA, 'heights-history.json');
   let h = {};
   try { h = await readJSON(file); } catch {}
@@ -180,10 +180,10 @@ async function appendHeightHistory(pref, histFn) {
   // El sitio bloquea ráfagas (403): pocos pedidos por vuelta, espaciados, y se corta ante el primer error.
   // Con la actualización horaria, el histórico de todos los puertos se completa en unas horas.
   if (histFn) {
-    let budget = 5;
+    let budget = maxFetch;
     for (const s of pref.stations) {
       const key = `${s.river}|${s.port}`;
-      if (!budget || !HEIGHT_RIVERS.test(s.river) || Object.keys(h[key] || {}).length >= 5) continue;
+      if (!budget || !(HEIGHT_RIVERS.test(s.river) || s.grp) || Object.keys(h[key] || {}).length >= 5) continue;
       budget--;
       try {
         for (const r of (await histFn(s)) || []) if (r.height_m != null) (h[key] ||= {})[r.date] = r.height_m;
@@ -267,7 +267,7 @@ async function refreshExtras() {
         const extra = await inaX.fetchHeightsINAExtra();
         const have = new Set(out.heights.stations.map((s) => `${s.river}|${s.port}`));
         out.heights.stations.push(...extra.filter((s) => !have.has(`${s.river}|${s.port}`)));
-        out.history = await appendHeightHistory({ stations: extra }, (s) => inaX.fetchHeightsINAHistory(s.port, 30));
+        out.history = await appendHeightHistory({ stations: extra }, (s) => inaX.fetchHeightsINAHistory(s.port, 30), 15);
       } catch (e) { out.errors.ina_extra = e.message; }
     }
   }

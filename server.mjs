@@ -646,7 +646,7 @@ async function refreshPrecip() {
   log(`lluvia actualizada: ${grid.nx}×${grid.ny} puntos, ${grid.days[0]} → ${grid.days.at(-1)}`);
 }
 const safeRefreshPrecip = () => (refreshingPrecip ||= refreshPrecip()
-  .catch((e) => log('error en la lluvia:', e.message))
+  .catch((e) => { log('error en la lluvia:', e.message, '— se reintenta en 15 minutos'); setTimeout(safeRefreshPrecip, 15 * 60e3); })
   .finally(() => (refreshingPrecip = null)));
 safeRefreshPrecip();
 setInterval(safeRefreshPrecip, PRECIP_MS);

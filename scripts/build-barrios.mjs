@@ -90,11 +90,11 @@ cand.forEach(({ f, rs, c, near }, i) => {
     id: p.id_renabap, n: p.nombre_barrio, loc: p.localidad, dep: p.departamento, prov: p.provincia,
     fam: p.cantidad_familias_aproximada ?? null, viv: p.cantidad_viviendas_aproximadas ?? null,
     c: [+c[0].toFixed(5), +c[1].toFixed(5)], d: +near.d.toFixed(1), km: Math.round(near.km), r: near.river, st: s.id,
-    h: +h.toFixed(1), p: poly, ...(h < (near.river.startsWith('c:') ? -2 : -3) ? { x: 1 } : {}),
+    h: +h.toFixed(1), p: poly, ...(h < (near.river.startsWith('c:') ? 0 : -3) ? { x: 1 } : {}),
   });
 });
 out.sort((a, b) => a.h - b.h);
-console.log('con referencia dudosa (barrio >3 m bajo el río):', out.filter((b) => b.x).length);
+console.log('con referencia dudosa (barrio bajo el río):', out.filter((b) => b.x).length);
 const doc = {
   fuente: 'Registro Nacional de Barrios Populares (RENABAP) · Secretaría de Integración Socio Urbana · datos.gob.ar · CC BY 4.0',
   elevacion: 'SRTM 30 m (NASA) vía OpenTopoData. Altura sobre el río estimada, con error de varios metros.',

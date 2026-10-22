@@ -24,7 +24,7 @@ const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 const json = (u) => fetch(u).then((r) => (r.ok ? r.json() : Promise.reject(new Error(u))));
 
 // ---------- datos
-const [data, extras, ratingsDoc, barrios, geo, cauDoc, pDoc, munDoc] = await Promise.all([
+const [data, extras, ratingsDoc, barrios, geo, cauDoc, pDoc, damDoc, munDoc] = await Promise.all([
   json('/api/data'),
   json('/api/extras').catch(() => ({})),
   json('/ratings.json').catch(() => ({})),
@@ -32,6 +32,7 @@ const [data, extras, ratingsDoc, barrios, geo, cauDoc, pDoc, munDoc] = await Pro
   json('geo.json'),
   json('/cauces.json').catch(() => null),
   json('/puertos.json').catch(() => null),
+  json('/represas.json').catch(() => null),
   json('/municipios.json').catch(() => null),
 ]).catch((e) => {
   $('#stage').insertAdjacentHTML('afterbegin', '<p class="float" style="top:50px;left:10px;padding:8px 12px">No se pudieron cargar los datos. Probá de nuevo en un minuto.</p>');
@@ -145,7 +146,7 @@ const LAYERS = {
 };
 
 // ---------- capa vectorial: ríos, puntos de caudal y barrios
-const gLoc = el('g', {}, vec), gRiv = el('g', {}, vec), gPts = el('g', {}, vec), gRut = el('g', {}, vec), gBar = el('g', {}, vec), gHot = el('g', {}, vec), gLab = el('g', {}, vec); // gHot: los barrios afectados, siempre por encima
+const gLoc = el('g', {}, vec), gRiv = el('g', {}, vec), gPts = el('g', {}, vec), gDam = el('g', {}, vec), gRut = el('g', {}, vec), gBar = el('g', {}, vec), gHot = el('g', {}, vec), gLab = el('g', {}, vec); // gHot: los barrios afectados, siempre por encima
 const rivPaths = Object.values(geo.stems).map((st) => ({ c: st.c, n: el('path', { class: 'riv' }, gRiv) }));
 for (const c of CAUCES) rivPaths.push({ c: c.c, n: el('path', { class: 'riv cau' }, gRiv) });
 for (const [id, t] of Object.entries(geo.tribs || {})) rivPaths.push({ c: t.c, n: el('path', { class: id === 'pilcomayo' ? 'riv obs' : 'riv' }, gRiv) });
@@ -197,7 +198,7 @@ const VECINAS = [
 const LOC = [...(munDoc?.municipios ?? []).filter((m) => m.c && m.pob).map((m) => ({ n: m.n, lon: m.c[0], lat: m.c[1], pob: m.pob })),
   ...VECINAS.map(([n, lon, lat, pob]) => ({ n, lon, lat, pob })),
   // zona aproximada de la formación Vaca Muerta (Neuquén): un rótulo, no un límite; se ve con el mapa alejado
-  { n: 'Vaca Muerta', lon: -69.3, lat: -38.45, pob: 1e9, area: true }].sort((a, b) => b.pob - a.pob);
+  { n: 'Vaca Muerta', lon: -69.8, lat: -38.5, pob: 1e9, area: true }].sort((a, b) => b.pob - a.pob);
 const locMin = (z) => (z < 6.5 ? 150e3 : z < 7.5 ? 50e3 : z < 8.5 ? 20e3 : z < 9.5 ? 8e3 : z < 10.5 ? 3e3 : z < 11.5 ? 1e3 : 0);
 const locNodes = [];
 function renderLoc(s) {
@@ -227,8 +228,35 @@ function renderLoc(s) {
   }
   for (; k < locNodes.length; k++) locNodes[k].c.style.display = locNodes[k].t.style.display = 'none';
 }
+// ---------- represas del Comahue (OpenStreetMap): regulan el Limay y el Neuquén; el modelo de caudal no las ve
+const DAMS = damDoc?.represas ?? [];
+if (!DAMS.length) $('#c-dam').closest('label').hidden = true;
+const damNodes = DAMS.map((d, i) => ({ r: el('rect', { class: 'dm', width: 10, height: 10, 'data-i': i }, gDam), t: el('text', { class: 'dm-t', dx: 9, dy: 4 }, gDam) }));
+DAMS.forEach((d, i) => { damNodes[i].t.textContent = d.n; });
+function renderDams(s) {
+  const on = $('#c-dam').checked;
+  gDam.style.display = on ? '' : 'none';
+  if (!on) return;
+  DAMS.forEach((d, i) => {
+    const x = sx(d.lon, s), y = sy(d.lat, s), vis = x > -30 && x < W + 30 && y > -30 && y < H + 30;
+    const o = damNodes[i];
+    o.r.style.display = vis ? '' : 'none';
+    o.t.style.display = vis && V.z >= 8 ? '' : 'none';
+    if (!vis) return;
+    o.r.setAttribute('x', (x - 5).toFixed(1)); o.r.setAttribute('y', (y - 5).toFixed(1));
+    o.t.setAttribute('x', x.toFixed(1)); o.t.setAttribute('y', y.toFixed(1));
+  });
+}
+function tipDam(i) {
+  const d = DAMS[i];
+  return `<b>Represa ${esc(d.n)}</b> <span class="muted">· río ${esc(d.rio)}</span><br>` +
+    (d.mw ? `<div class="row"><span>Potencia</span><span>${nf.format(d.mw)} MW</span></div>` : '') +
+    (d.nota ? `<div class="row"><span>${esc(d.nota)}</span><span></span></div>` : '') +
+    '<span class="muted">Regula el caudal del río; el modelo no la ve</span>';
+}
 function renderVec() {
   const s = scale(), on = $('#c-riv').checked;
+  renderDams(s);
   renderLoc(s);
   // la traza de los ríos es esquemática: de cerca la imagen satelital muestra el río real y la línea desentona
   gRiv.style.display = on && V.z < 9.5 ? '' : 'none';
@@ -373,6 +401,8 @@ vec.addEventListener('mousemove', (ev) => {
   let html = g ? tipOf(BAR[+g.dataset.i]) : null;
   const gd = !g ? ev.target.closest?.('.gd') : null;
   if (gd) html = tipGauge(+gd.dataset.i);
+  const dm = !html ? ev.target.closest?.('.dm') : null;
+  if (dm) html = tipDam(+dm.dataset.i);
   if (!html && RUT && $('#c-rut').checked) {
     const rc = view.getBoundingClientRect(), s = scale();
     const ri = RUT.hit(ev.clientX - rc.left, ev.clientY - rc.top, { X: (lon) => sx(lon, s), Y: (lat) => sy(lat, s) });
@@ -560,6 +590,7 @@ $('#c-sat').addEventListener('change', (ev) => { LAYERS.sat.on = ev.target.check
 $('#c-bar').addEventListener('change', schedule);
 $('#c-riv').addEventListener('change', schedule);
 $('#c-loc').addEventListener('change', schedule);
+$('#c-dam').addEventListener('change', schedule);
 $('#c-rut').addEventListener('change', schedule);
 // ---------- búsqueda de barrio o localidad
 const q = $('#q'), res = $('#q-res');

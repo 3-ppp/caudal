@@ -125,3 +125,7 @@ body.mapa { height: 100dvh; display: flex; flex-direction: column; overflow: hid
 .chip:hover { color: var(--ink); border-color: var(--ink); }
 #vec text.area { font-size: 13px; font-style: italic; letter-spacing: 0.04em; fill: #b45309; }
 #view.sat #vec text.area { fill: #fcd34d; }
+#vec .dm { fill: #0e7490; stroke: var(--bg); stroke-width: 2px; cursor: default; }
+#vec .dm-t { font-size: 10.5px; fill: #0e7490; font-weight: bold; }
+#view.sat #vec .dm { fill: #22d3ee; stroke: #000; stroke-width: 1.5px; }
+#view.sat #vec .dm-t { fill: #67e8f9; }

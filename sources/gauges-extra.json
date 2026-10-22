@@ -393,5 +393,96 @@
   "lat": -30.9949,
   "lon": -57.8993,
   "grp": "pna"
+ },
+ "NEUQUEN - CHOS MALAL": {
+  "id": 32997,
+  "river": "NEUQUEN",
+  "lat": -37.4064,
+  "lon": -70.2292,
+  "grp": "cauce"
+ },
+ "NEUQUEN - PASO DE INDIOS": {
+  "id": 6898,
+  "river": "NEUQUEN",
+  "lat": -38.5303,
+  "lon": -69.4022,
+  "grp": "cauce"
+ },
+ "NEUQUEN - DIQUE BALLESTER": {
+  "id": 37043,
+  "river": "NEUQUEN",
+  "lat": -38.7247,
+  "lon": -68.1706,
+  "grp": "cauce"
+ },
+ "NEUQUEN - NEUQUEN": {
+  "id": 34346,
+  "river": "NEUQUEN",
+  "lat": -38.9497,
+  "lon": -68.0228,
+  "grp": "cauce"
+ },
+ "LIMAY - ISLA JORDAN": {
+  "id": 37038,
+  "river": "LIMAY",
+  "lat": -38.9961,
+  "lon": -67.9733,
+  "grp": "cauce"
+ },
+ "NEGRO - ISLA JORDAN": {
+  "id": 37038,
+  "river": "NEGRO",
+  "lat": -38.9961,
+  "lon": -67.9733,
+  "grp": "cauce"
+ },
+ "NEGRO - PASO CORDOVA": {
+  "id": 37040,
+  "river": "NEGRO",
+  "lat": -39.1125,
+  "lon": -67.6231,
+  "grp": "cauce"
+ },
+ "NEGRO - PRIMERA ANGOSTURA": {
+  "id": 33760,
+  "river": "NEGRO",
+  "lat": -40.4556,
+  "lon": -63.7897,
+  "grp": "cauce"
+ },
+ "COLORADO - PATA MORA": {
+  "id": 34010,
+  "river": "COLORADO",
+  "lat": -37.2083,
+  "lon": -69.1139,
+  "grp": "cauce"
+ },
+ "COLORADO - PUESTO HERNANDEZ": {
+  "id": 32291,
+  "river": "COLORADO",
+  "lat": -38.4136,
+  "lon": -67.0431,
+  "grp": "cauce"
+ },
+ "COLORADO - PICHI MAHUIDA": {
+  "id": 6874,
+  "river": "COLORADO",
+  "lat": -38.8217,
+  "lon": -64.9814,
+  "grp": "cauce"
+ },
+ "COLORADO - PASO ALSINA": {
+  "id": 32666,
+  "river": "COLORADO",
+  "lat": -39.3669,
+  "lon": -63.2375,
+  "grp": "cauce"
+ },
+ "COLORADO - PEDRO LURO": {
+  "id": 33091,
+  "river": "COLORADO",
+  "lat": -39.5247,
+  "lon": -62.6756,
+  "grp": "cauce"
  }
 }

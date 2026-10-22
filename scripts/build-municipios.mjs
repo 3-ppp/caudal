@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs';
 import { root, rootPath } from './lib/rio.mjs';
 
 const URL_CSV = 'http://datos.mininterior.gob.ar/dataset/8431ab79-3f44-41ee-b72b-cdc645f68d1e/resource/ebe52783-6a7f-4112-8a7f-a17c91cb6b4e/download/brgl_-portal-andino-23_12.csv';
-const PROVINCIAS = new Set(['Misiones', 'Corrientes', 'Chaco', 'Formosa', 'Entre Ríos', 'Santa Fe']);
+const PROVINCIAS = new Set(['Misiones', 'Corrientes', 'Chaco', 'Formosa', 'Entre Ríos', 'Santa Fe', 'Neuquén', 'Río Negro']);
 
 await mkdir(root('data/cache/'), { recursive: true });
 const file = rootPath('data/cache/gobiernos-locales.csv');

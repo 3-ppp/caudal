@@ -39,6 +39,12 @@ const CAUCES = [
   { id: 'malabrigo', name: 'Arroyo Malabrigo', osm: 'Arroyo Malabrigo', bb: [-29.9, -60.3, -28.9, -59.5], gauges: [[34340, 'RN 11']] },
   { id: 'garzas', name: 'Arroyo Las Garzas', osm: 'Arroyo Las Garzas', bb: [-29.4, -60.2, -28.4, -59.2], gauges: [[32023, 'RN 11']] },
   { id: 'barrancas', name: 'Arroyo Barrancas', osm: 'Arroyo Barrancas', bb: [-30.6, -59.8, -29.8, -59], gauges: [[9200, 'Paso La Llana']] },
+  // Comahue (Vaca Muerta): los ríos de la cuenca con las boyas del INA. Sus caudales los manejan las represas del Comahue (Alicurá,
+  // Piedra del Águila, Pichi Picún Leufú, El Chocón, Arroyito, Mari Menuco), que el modelo no ve: solo cuenta la altura medida.
+  { id: 'neuquen', name: 'Río Neuquén', osm: 'Río Neuquén|Rio Neuquen', bb: [-39.1, -70.6, -36.8, -67.9], gauges: [[32997, 'Chos Malal'], [6898, 'Paso de Indios'], [37043, 'Dique Ballester'], [34346, 'Neuquén']] },
+  { id: 'limay', name: 'Río Limay', osm: 'Río Limay|Rio Limay', bb: [-39.6, -69.0, -38.85, -67.9], gauges: [[37038, 'Isla Jordán']] },
+  { id: 'negropat', name: 'Río Negro (Patagonia)', osm: 'Río Negro|Rio Negro', bb: [-41.3, -68.2, -38.9, -62.5], gauges: [[37038, 'Isla Jordán'], [37040, 'Paso Córdova'], [33760, 'Primera Angostura']] },
+  { id: 'colorado', name: 'Río Colorado', osm: 'Río Colorado|Rio Colorado', bb: [-39.8, -69.9, -36.8, -62.0], gauges: [[34010, 'Pata Mora'], [32291, 'Puesto Hernández'], [6874, 'Pichi Mahuida'], [32666, 'Paso Alsina'], [33091, 'Pedro Luro']] },
 ];
 
 const ONLY = process.argv[2] ? process.argv[2].split(',') : null;

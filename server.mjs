@@ -598,7 +598,7 @@ const server = createServer(async (req, res) => {
         return res.end(img);
       } catch (e) { return sendText(res, 404, e.message); }
     }
-    if ((p === '/' || p === '/index.html') && req.method === 'GET') analytics.pageView(req);
+    if ((p === '/' || p === '/index.html' || p === '/mapa.html') && req.method === 'GET') analytics.pageView(req, p === '/mapa.html' ? 'mapa' : 'monitor', url.searchParams.get('via'));
     const rel = p === '/' ? 'index.html' : decodeURIComponent(p).replace(/^\/+/, '');
     const file = path.join(PUBLIC, rel);
     if (!file.startsWith(PUBLIC + path.sep)) return sendText(res, 403, 'prohibido');

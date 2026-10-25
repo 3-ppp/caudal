@@ -652,7 +652,7 @@ function shareData() {
   }
   return { text, url };
 }
-initShare({ container: $('#share'), get: shareData });
+initShare({ container: $('#share'), page: 'mapa', get: shareData });
 
 // ---------- arranque: la vista sale del hash (#zoom/lat/lon[/bID]) o muestra toda la zona
 {

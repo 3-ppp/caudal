@@ -1,6 +1,6 @@
 // Compartir la vista actual con tres íconos, debajo del selector de fecha: WhatsApp, X y copiar el enlace.
 //
-//   initShare({ container, get: () => ({ text, url }) })
+//   initShare({ container, page: 'mapa' | 'monitor', get: () => ({ text, url }) })
 //
 // `get` se llama al tocar un ícono, así comparte el estado de ese momento (el zoom, el barrio y la fecha viajan en el enlace).
 // WhatsApp usa wa.me, que en el celular abre la app y en la compu, WhatsApp Web.
@@ -26,7 +26,11 @@ async function copyText(text) {
   }
 }
 
-export function initShare({ container, get }) {
+// el enlace compartido lleva ?via=wa|x|link (antes del #), para saber por qué botón llegó cada visita
+const withVia = (url, via) => { const [base, hash] = url.split('#'); return `${base}${base.includes('?') ? '&' : '?'}via=${via}${hash != null ? '#' + hash : ''}`; };
+const beacon = (page, sh) => { try { navigator.sendBeacon('/api/hit', new Blob([JSON.stringify({ sh, p: page })], { type: 'application/json' })); } catch {} };
+
+export function initShare({ container, page, get }) {
   container.classList.add('share-row');
   container.innerHTML =
     '<span class="share-hint muted" aria-live="polite">compartir</span>' +
@@ -41,10 +45,11 @@ export function initShare({ container, get }) {
     const b = ev.target.closest('.share-btn');
     if (!b) return;
     const d = get(), enc = encodeURIComponent;
-    if (b.dataset.k === 'wa') window.open(`https://wa.me/?text=${enc(`${d.text} ${d.url}`)}`, '_blank', 'noopener');
-    else if (b.dataset.k === 'x') window.open(`https://twitter.com/intent/tweet?text=${enc(d.text)}&url=${enc(d.url)}`, '_blank', 'noopener');
+    if (b.dataset.k === 'wa') { beacon(page, 'wa'); window.open(`https://wa.me/?text=${enc(`${d.text} ${withVia(d.url, 'wa')}`)}`, '_blank', 'noopener'); }
+    else if (b.dataset.k === 'x') { beacon(page, 'x'); window.open(`https://twitter.com/intent/tweet?text=${enc(d.text)}&url=${enc(withVia(d.url, 'x'))}`, '_blank', 'noopener'); }
     else {
-      const ok = await copyText(d.url);
+      const ok = await copyText(withVia(d.url, 'link'));
+      if (ok) beacon(page, 'link');
       say(ok ? 'enlace copiado' : 'no se pudo copiar');
       if (ok) { b.innerHTML = svg('ok'); setTimeout(() => { b.innerHTML = svg('copy'); }, 1800); }
     }

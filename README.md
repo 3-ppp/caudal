@@ -142,7 +142,7 @@ Contador propio (`analytics.mjs`), sin dependencias, sin cookies y sin terceros.
 
 - **Visitas:** se cuentan las cargas de la página. Bots y clientes automatizados (buscadores, `curl`, navegadores sin interfaz, monitores) no cuentan.
 - **Visitantes únicos:** hash de la sal del día + IP + navegador. La IP no se guarda, y la sal se descarta al cambiar el día, así que no se puede seguir a nadie de un día a otro.
-- **Qué se guarda:** solo totales por día, durante 400 días, en `data/analytics.json`: visitas, únicos, celular o compu, dominio de origen y localidades consultadas. Las localidades las avisa la página al elegir una, con un `sendBeacon` de pocos bytes.
+- **Qué se guarda:** solo totales por día, durante 400 días, en `data/analytics.json`: visitas (por página, monitor o mapa), únicos, celular o compu, dominio de origen, localidades consultadas y compartidos: cuántas veces se tocó cada botón de compartir (WhatsApp, X, copiar enlace) y cuántas visitas llegaron por esos enlaces, que llevan `?via=wa`, `?via=x` o `?via=link`. Las localidades las avisa la página al elegir una, con un `sendBeacon` de pocos bytes.
 - **Página `/stats`:** privada. Sin la clave responde 404. La clave se genera la primera vez en `data/stats-key` y se anuncia una sola vez en el log del servicio:
 
 ```

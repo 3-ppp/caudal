@@ -887,7 +887,7 @@ function reportStation(id) {
 }
 
 // compartir: el enlace lleva la estación elegida (#rosario); el texto, su caudal de hoy y qué tan normal es
-initShare({ container: $('#share'), get: () => {
+initShare({ container: $('#share'), page: 'monitor', get: () => {
   const st = byId[SEL], q = st.q[todayIdx];
   return { url: location.origin + location.pathname + '#' + SEL,
     text: `${st.name}: caudal de ${fmtQ(q)} m³/s hoy, ${klass(st, todayIdx)} para la fecha. Monitor de los ríos Paraná y Uruguay.` };

@@ -3,6 +3,7 @@
 // y una capa vectorial en SVG que se reproyecta en cada cuadro. Sumar una capa nueva es agregar una
 // entrada en LAYERS (raster por mosaicos) o dibujar en la capa vectorial.
 import { createRise } from './rise.js';
+import { initShare } from './share.js';
 import { createRutas, CLS, TXT } from './rutas.js';
 
 const $ = (s) => document.querySelector(s);
@@ -329,6 +330,7 @@ function updateStates() {
       if (o.n.parentNode !== g) { g.appendChild(o.halo); g.appendChild(o.n); }
     }
   }
+  lastC = c;
   const fm = (a) => nf.format(a), hit = c.wet[0] + c.near[0];
   $('#bar-sum').innerHTML =
     `<div class="grad"><span class="muted small">más bajo</span><i class="gbar"></i><span class="muted small">más alto</span></div><p class="small muted lg-note">altura sobre el agua más cercana</p>` +
@@ -451,11 +453,13 @@ const schedule = () => { if (!dirty) { dirty = true; requestAnimationFrame(rende
 new ResizeObserver(() => { const r = view.getBoundingClientRect(); W = r.width; H = r.height; vec.setAttribute('viewBox', `0 0 ${W} ${H}`); schedule(); }).observe(view);
 
 let hashTimer = null;
+let lastC = null; // conteo de barrios por estado en la fecha elegida (lo arma updateStates)
+// el enlace lleva la vista, el barrio elegido y, si no es hoy, la fecha: #zoom/lat/lon[/bID][/dAAAA-MM-DD]
+const hashNow = () => `#${V.z.toFixed(2)}/${V.lat.toFixed(4)}/${V.lon.toFixed(4)}${selected >= 0 ? '/b' + BAR[selected].id : ''}${T !== todayIdx ? '/d' + days[T] : ''}`;
 function syncHash() {
   clearTimeout(hashTimer);
   hashTimer = setTimeout(() => {
-    const h = `#${V.z.toFixed(2)}/${V.lat.toFixed(4)}/${V.lon.toFixed(4)}${selected >= 0 ? '/b' + BAR[selected].id : ''}`;
-    try { history.replaceState(null, '', h); } catch {}
+    try { history.replaceState(null, '', hashNow()); } catch {}
   }, 300);
 }
 
@@ -570,7 +574,7 @@ function drawTime() {
   const n = T - todayIdx;
   $('#date-rel').textContent = n === 0 ? 'hoy' : n < 0 ? `hace ${-n} día${n === -1 ? '' : 's'}` : `pronóstico · en ${n} día${n === 1 ? '' : 's'}`;
 }
-function setT(t) { T = clamp(t, 0, days.length - 1); drawTime(); updateStates(); }
+function setT(t) { T = clamp(t, 0, days.length - 1); drawTime(); updateStates(); syncHash(); }
 slider.addEventListener('input', () => { stopPlay(); setT(+slider.value); });
 $('#today').addEventListener('click', () => { stopPlay(); setT(todayIdx); });
 let timer = null;
@@ -633,10 +637,28 @@ q.addEventListener('keydown', (ev) => {
 res.addEventListener('mousedown', (ev) => { const li = ev.target.closest('li'); if (li) { ev.preventDefault(); go(results[+li.dataset.i]); } });
 q.addEventListener('blur', () => setTimeout(() => { res.hidden = true; }, 150));
 
+// ---------- compartir: el enlace lleva la vista, el barrio y la fecha; el texto resume lo que se está viendo
+function shareData() {
+  const fecha = T === todayIdx ? 'hoy' : `el ${dShort(days[T])}`;
+  const url = location.origin + location.pathname + hashNow();
+  let text;
+  if (selected >= 0) {
+    const b = BAR[selected], st = stateOf(b, T);
+    text = `${b.n} (${b.loc || b.dep}, ${b.prov}): ${b.fam != null ? `~${nf.format(b.fam)} familias, ` : ''}${b.x ? 'altura sobre el agua sin dato confiable' : `a ~${nf1.format(Math.max(b.h, 0))} m sobre el agua`}` +
+      (st === 'wet' ? ` · inundación probable ${fecha}` : st === 'near' ? ` · inundación posible ${fecha}` : '') + '.';
+  } else {
+    const wet = lastC?.wet[0] ?? 0;
+    text = `Mapa de barrios populares y crecida de los ríos (Litoral y Comahue), ${fecha}` + (wet ? `: ${nf.format(wet)} barrios con inundación probable.` : '.');
+  }
+  return { text, url };
+}
+initShare({ container: $('#share'), get: shareData });
+
 // ---------- arranque: la vista sale del hash (#zoom/lat/lon[/bID]) o muestra toda la zona
 {
-  const m = location.hash.match(/^#(\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)(?:\/b(\d+))?$/);
+  const m = location.hash.match(/^#(\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)(?:\/b(\d+))?(?:\/d(\d{4}-\d{2}-\d{2}))?$/);
   const bi = m && m[4] ? BAR.findIndex((b) => b.id === +m[4]) : -1;
+  if (m?.[5] && days.includes(m[5])) T = days.indexOf(m[5]);
   const wait = () => new Promise((r) => { if (W) r(); else new ResizeObserver((_, o) => { if (view.getBoundingClientRect().width) { o.disconnect(); r(); } }).observe(view); });
   await wait();
   Object.assign(V, m ? { z: +m[1], lat: +m[2], lon: +m[3] } : homeView());

@@ -70,6 +70,8 @@ Página aparte (`/mapa.html`, enlace "mapa" en la barra superior): un mapa casi 
 - **Municipios** (`scripts/build-municipios.mjs` → `public/municipios.json`): misma idea que los barrios; las descargas se cachean en `data/cache/`.
 - Los scripts se corren a mano cuando se quiera actualizar (`node scripts/build-barrios.mjs`, `node scripts/build-municipios.mjs`, `node scripts/build-ratings.mjs`); las respuestas de elevación se cachean en `data/cache/`.
 
+**Compartir** (`public/share.js`): tres íconos debajo del selector de fecha, en el mapa y en el monitor: WhatsApp, X y copiar enlace. Comparten el estado del momento: el enlace del mapa lleva la vista, el barrio elegido y, si no es hoy, la fecha (`#zoom/lat/lon[/bID][/dAAAA-MM-DD]`); el del monitor, la estación (`#rosario`). El texto resume lo que se ve (por ejemplo, el barrio, sus familias, la altura sobre el agua y si el río lo alcanza ese día). Las páginas tienen etiquetas Open Graph y de Twitter con una imagen de vista previa (`public/og-mapa.jpg`, `public/og-monitor.jpg`, 1200×630): son estáticas, así que el enlace de un barrio muestra la vista previa general del mapa y el barrio se abre al tocar el enlace. Hay que regenerar esas imágenes (una captura de la página) si cambia mucho el aspecto.
+
 **Sumar una capa**: `public/mapa.js` tiene un motor propio y sin dependencias. Una capa raster por mosaicos es una entrada en `LAYERS` (una función `(nivel, fila, columna) → URL`) más una casilla en el panel; una capa vectorial se dibuja en `renderVec()`, que reproyecta en cada cuadro.
 
 Uso no comercial gratuito en Open-Meteo. Para uso comercial o alto tráfico, revisar sus [términos](https://open-meteo.com/en/terms).

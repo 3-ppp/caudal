@@ -229,8 +229,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: 8px 0 2p
 
 /* ---------- tiempo */
 .time {
-  position: absolute; right: 16px; bottom: 36px; z-index: 3; /* abajo a la derecha: ahí el mapa es océano y Uruguay, sin ríos */
-  width: min(540px, calc(100% - 120px));
+  /* flotando abajo y al centro de la pantalla, como en el mapa: la página se recorre libre y la fecha sigue a mano */
+  position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 40;
+  width: min(620px, calc(100% - 24px));
   display: flex; align-items: center; gap: 12px;
   background: var(--bg); border: 1px solid var(--frame); box-shadow: 3px 3px 0 var(--rule);
   padding: 5px 12px;
@@ -360,7 +361,7 @@ tr.river-row th::before { content: "# "; color: var(--accent); }
   .legend { padding-left: 8px; }
   .dash { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 6px 12px 24px; grid-template-areas: "kpis" "profile" "detail" "dams" "table" "foot"; }
   .dash .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .time { left: 50%; right: auto; transform: translateX(-50%); width: calc(100% - 64px); bottom: 34px; }
+  .time { width: calc(100% - 20px); bottom: 10px; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 600px) {
@@ -441,3 +442,22 @@ details.dam .warn { color: var(--st-critical); font-weight: 600; }
 .river-obs { stroke: var(--ink-3); stroke-dasharray: calc(6px / var(--k, 1)) calc(5px / var(--k, 1)); stroke-opacity: 0.7; }
 .gauge-dot { fill: var(--fig); stroke: var(--ink-2); stroke-width: calc(1.5px / var(--k, 1)); cursor: default; }
 #map.sat-on .river-obs { stroke: #fff; }
+
+/* compartir: tres íconos debajo del selector de fecha */
+.share-row { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 3px; font-size: 11px; line-height: 1; }
+.share-hint { margin-right: auto; font-size: 11px; }
+.share-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 24px; padding: 0; background: none; border: 1px solid transparent; color: var(--ink-2); cursor: pointer; }
+.share-btn:hover, .share-btn:focus-visible { color: var(--ink); border-color: var(--ink); outline: none; }
+.share-btn svg { display: block; }
+/* barra superior en celulares angostos: entra marca + monitor/mapa + compartir + tema */
+@media (max-width: 480px) {
+  .statusbar { gap: 6px; padding-left: 10px; padding-right: 8px; }
+  .statusbar .sb-name { font-size: 13px; }
+  .statusbar .cursor { display: none; }
+  .sb-right { gap: 4px; }
+  .sb-link, .sb-btn { font-size: 12px; }
+  .sb-link::before, .sb-btn::before { content: "["; } .sb-link::after, .sb-btn::after { content: "]"; }
+}
+
+/* lugar para que la fecha flotante no tape el final de la página */
+main.monitor { padding-bottom: 120px; }

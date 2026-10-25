@@ -106,8 +106,9 @@ body.mapa { height: 100dvh; display: flex; flex-direction: column; overflow: hid
   .mapa .sb-right a[target] { display: none; }
   .search { top: 8px; left: 8px; right: 8px; width: auto; transform: none; }
   .search ul { position: absolute; top: 100%; left: 0; right: 0; }
-  #layers { top: 50px; left: 8px; width: auto; max-width: calc(100% - 70px); max-height: 46%; }
-  .zoom-ctl { top: 50px; right: 8px; }
+  .zonas { margin-top: 4px; }
+  #layers { top: 78px; left: 8px; width: auto; max-width: calc(100% - 70px); max-height: 42%; }
+  .zoom-ctl { top: 78px; right: 8px; }
   #card { top: auto; left: 8px; right: 8px; bottom: 98px; width: auto; max-height: 42%; }
   #timebar { bottom: 26px; }
   .attrib { font-size: 10px; }

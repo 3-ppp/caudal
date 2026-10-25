@@ -1,4 +1,5 @@
 // Paraná — interfaz. Sin dependencias.
+import { initShare } from './share.js';
 const NS = 'http://www.w3.org/2000/svg';
 const $ = (s) => document.querySelector(s);
 
@@ -884,6 +885,13 @@ function reportStation(id) {
   lastReported = id;
   try { navigator.sendBeacon('/api/hit', new Blob([JSON.stringify({ s: id })], { type: 'application/json' })); } catch {}
 }
+
+// compartir: el enlace lleva la estación elegida (#rosario); el texto, su caudal de hoy y qué tan normal es
+initShare({ container: $('#share'), get: () => {
+  const st = byId[SEL], q = st.q[todayIdx];
+  return { url: location.origin + location.pathname + '#' + SEL,
+    text: `${st.name}: caudal de ${fmtQ(q)} m³/s hoy, ${klass(st, todayIdx)} para la fecha. Monitor de los ríos Paraná y Uruguay.` };
+} });
 
 function select(id) {
   reportStation(id);

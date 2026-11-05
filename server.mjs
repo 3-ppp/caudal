@@ -6,6 +6,7 @@
 // Fuente de caudal: GloFAS (Copernicus) vía Open-Meteo Flood API, modelo diario a 0.05°.
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
+import { initArchive, archiveGlofas, archiveHeights, archiveDam } from './archive.mjs';
 import { createHash } from 'node:crypto';
 import zlib, { gzipSync, brotliCompressSync } from 'node:zlib';
 import path from 'node:path';
@@ -149,6 +150,7 @@ async function refresh() {
     }),
   };
   await writeFile(path.join(DATA, 'latest.json'), JSON.stringify(out));
+  await archiveGlofas(out).catch((e) => log('archivo glofas:', e.message));
   log(`datos actualizados: ${out.stations.length} puntos, ${days[0]} → ${days.at(-1)}`);
 }
 
@@ -198,6 +200,7 @@ async function appendHeightHistory(pref, histFn, maxFetch = 5) {
     for (const d of Object.keys(h[key])) if (d < cutoff) delete h[key][d];
   }
   await writeFile(file, JSON.stringify(h));
+  await archiveHeights(h).catch((e) => log('archivo alturas:', e.message));
   return h;
 }
 
@@ -220,6 +223,7 @@ async function fetchDam(id, fn) {
   cache = { fetched: Date.now(), source: r.source, unit: r.unit,
     series: [...byDate.values()].filter((s) => s.date >= cutoff).sort((a, b) => a.date.localeCompare(b.date)) };
   await writeFile(file, JSON.stringify(cache));
+  await archiveDam(id, cache.series).catch((e) => log('archivo represa:', e.message));
   return cache;
 }
 
@@ -611,6 +615,7 @@ const server = createServer(async (req, res) => {
 });
 
 await mkdir(DATA, { recursive: true });
+await initArchive(DATA);
 const allStations = await loadStations();
 const stationNames = Object.fromEntries(allStations.map((s) => [s.id, s.kind === 'trib' ? `río ${s.name}` : s.name]));
 const analytics = await createAnalytics({ dataDir: DATA, ownHost: process.env.SITE_HOST || null,

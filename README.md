@@ -182,13 +182,14 @@ Pensado para un VPS con Ubuntu 24.04 y Caddy. El servicio `caudal` escucha en `1
 
 Alcanza con 1 vCPU y 1 GB de RAM. El disco crece con la caché satelital (unos 20 MB al arrancar) y con la base de datos (pocos MB al año).
 
-**Captcha de los reportes (opcional)**: se crea un widget gratuito en el panel de Cloudflare (Turnstile), con el dominio del sitio, y se pasan las dos claves al servicio. Con un drop-in de systemd, para no tocar el archivo principal:
+**Captcha de los reportes (opcional)**: se crea un widget gratuito en el panel de Cloudflare (Turnstile), con el dominio del sitio, y se pasan las dos claves al servicio. Las claves van en un archivo que solo lee root (un drop-in con `Environment=` sería legible por cualquier usuario del servidor) y un drop-in de systemd que lo carga:
 
 ```
-sudo systemctl edit caudal   # y pegar:
-[Service]
-Environment=TURNSTILE_SITE_KEY=0x…
-Environment=TURNSTILE_SECRET_KEY=0x…
+sudo install -m 600 /dev/null /etc/caudal.env
+sudo nano /etc/caudal.env          # dos líneas: TURNSTILE_SITE_KEY=0x… y TURNSTILE_SECRET_KEY=0x…
+sudo systemctl edit caudal         # y pegar: [Service] / EnvironmentFile=/etc/caudal.env
+sudo systemctl restart caudal
+curl -s https://tu-dominio/api/config    # debe devolver {"captcha":"0x…"} y no null
 ```
 
 Sin las claves el servicio anda igual, sin captcha. La clave secreta no va nunca al repositorio ni al navegador.

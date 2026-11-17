@@ -12,3 +12,5 @@ data/stats-key
 capturas/
 data/cache/
 data/archive/
+
+data/caudal.db*

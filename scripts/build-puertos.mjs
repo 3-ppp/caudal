@@ -1,4 +1,4 @@
-// Genera public/puertos.json: las escalas de Prefectura (republicadas por el INA) con su ubicación, para dibujarlas en el
+// Genera layers/puertos.json: las escalas de Prefectura (republicadas por el INA) con su ubicación, para dibujarlas en el
 // mapa. El mapa une cada una con su lectura de hoy (extras.heights) por el nombre del puerto.
 //   node scripts/build-puertos.mjs [estaciones.json]
 import { writeFile, readFile } from 'node:fs/promises';
@@ -22,8 +22,8 @@ for (const e of est) {
   out.push({ port: s.port, n: e.nombre, river: s.river, lat: +c[1].toFixed(4), lon: +c[0].toFixed(4),
     ...(e.nivel_alerta != null ? { alert: e.nivel_alerta } : {}), ...(e.nivel_evacuacion != null ? { evac: e.nivel_evacuacion } : {}) });
 }
-await writeFile(root('public/puertos.json'), JSON.stringify({ fuente: 'Escalas de Prefectura Naval Argentina, vía INA (Sistema de Alerta Hidrológico)', generado: new Date().toISOString().slice(0, 10), puertos: out }));
-console.log('public/puertos.json:', out.length, 'puertos de', est.length, 'estaciones');
+await writeFile(root('layers/puertos.json'), JSON.stringify({ fuente: 'Escalas de Prefectura Naval Argentina, vía INA (Sistema de Alerta Hidrológico)', generado: new Date().toISOString().slice(0, 10), puertos: out }));
+console.log('layers/puertos.json:', out.length, 'puertos de', est.length, 'estaciones');
 // Escalas de la red de Prefectura que el monitor no usa (Delta, Río de la Plata, Uruguay menor, represas): se suman a las series
 // extra del servidor para que el mapa las muestre. Quedan fuera del monitor (grp: 'pna').
 const RIO = { PARANADELASPALMAS: 'DELTA', LATINTA: 'DELTA', CANALGAFOTRE: 'DELTA', PARANAIBICUY: 'DELTA', GUALEGUAY: 'DELTA', PARANAGUAZU: 'DELTA', CHANA: 'DELTA',

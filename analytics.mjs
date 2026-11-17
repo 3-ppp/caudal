@@ -5,9 +5,7 @@
 // - Se guardan solo totales por día: visitas, únicos, celular/compu, dominio de origen y
 //   localidades consultadas, visitas por página y compartidos (toques en WhatsApp, X o copiar enlace) con las visitas que
 //   llegan por esos enlaces (?via=wa|x|link). Los bots y clientes automatizados no cuentan.
-import { readFile, writeFile, rename } from 'node:fs/promises';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import path from 'node:path';
 
 const KEEP_DAYS = 400;
 const VIA = new Set(['wa', 'x', 'link']);
@@ -16,33 +14,30 @@ const VIA_NAME = { wa: 'WhatsApp', x: 'X', link: 'enlace copiado' };
 const BOT = /\bnode\b|undici|bot|crawl|spider|slurp|preview|fetch|curl|wget|python|httpclient|headless|lighthouse|monitor|uptime|pingdom|facebookexternalhit|whatsapp|telegram|discord|slack|embed/i;
 const dayAR = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 
-export async function createAnalytics({ dataDir, ownHost, stationIds, log }) {
-  const file = path.join(dataDir, 'analytics.json');
-  const todayFile = path.join(dataDir, 'analytics-today.json'); // sal y hashes del día en curso
-  const keyFile = path.join(dataDir, 'stats-key');
-
-  let db = { days: {} };
-  try { db = JSON.parse(await readFile(file, 'utf8')); } catch {}
-  let today = { day: null, salt: null, seen: [] };
-  try { today = JSON.parse(await readFile(todayFile, 'utf8')); } catch {}
+// Los totales viven en la base (tabla analytics_days); la sal y los hashes del día en curso, en docs "analytics-today".
+export async function createAnalytics({ store, ownHost, stationIds, log }) {
+  const since = new Date(Date.now() - KEEP_DAYS * 864e5).toISOString().slice(0, 10);
+  const db = { days: store.analyticsDays(since) };
+  let today = store.getDoc('analytics-today') ?? { day: null, salt: null, seen: [] };
   let seen = new Set(today.seen);
 
-  // clave para ver /stats: se genera una vez y se anuncia una sola vez en el log del servicio
-  let key;
-  try { key = (await readFile(keyFile, 'utf8')).trim(); } catch {}
+  // clave para ver /stats (y administrar la herramienta de análisis): se genera una vez y se anuncia una sola vez en el log del servicio
+  let key = store.getDoc('stats-key');
   if (!key) {
     key = randomBytes(18).toString('base64url');
-    await writeFile(keyFile, key + '\n', { mode: 0o600 });
+    store.setDoc('stats-key', key);
     log(`estadísticas: clave nueva generada → /stats?key=${key}`);
   }
 
   let dirty = false;
+  const touched = new Set(); // días con cambios sin guardar
   const bucket = () => {
     const d = dayAR();
     if (today.day !== d) { // día nuevo: sal nueva, se olvidan los hashes de ayer
       today = { day: d, salt: randomBytes(16).toString('hex'), seen: [] };
       seen = new Set();
     }
+    touched.add(d);
     const b = (db.days[d] ||= { views: 0, uniques: 0, mobile: 0, desktop: 0, refs: {}, stations: {} });
     b.pages ||= {}; b.shares ||= {}; b.via ||= {}; // días anteriores a estos contadores
     return b;
@@ -96,11 +91,13 @@ export async function createAnalytics({ dataDir, ownHost, stationIds, log }) {
     dirty = false;
     const cutoff = new Date(Date.now() - KEEP_DAYS * 864e5).toISOString().slice(0, 10);
     for (const d of Object.keys(db.days)) if (d < cutoff) delete db.days[d];
+    store.pruneAnalytics(cutoff);
     today.seen = [...seen];
-    // escritura atómica: primero a un temporal, después se renombra
-    await writeFile(file + '.tmp', JSON.stringify(db));
-    await rename(file + '.tmp', file);
-    await writeFile(todayFile, JSON.stringify(today), { mode: 0o600 });
+    store.tx(() => {
+      for (const d of touched) if (db.days[d]) store.putAnalyticsDay(d, db.days[d]);
+      store.setDoc('analytics-today', today);
+    });
+    touched.clear();
   }
   setInterval(() => flush().catch((e) => log('estadísticas:', e.message)), 60e3).unref();
 

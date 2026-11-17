@@ -3,7 +3,7 @@
 //   node scripts/build-cauces.mjs [id,id,...]    (sin argumentos: todos)
 //
 // Salidas:
-//   public/cauces.json            traza de cada río (de OpenStreetMap) con su km y sus puntos de medición
+//   layers/cauces.json            traza de cada río (de OpenStreetMap) con su km y sus puntos de medición
 //   sources/gauges-extra.json     las series del INA que el servidor consulta (puerto, río, ubicación)
 //   (la altura mediana de cada punto, de la que sale la subida del río, la calcula scripts/build-ratings.mjs)
 //
@@ -137,16 +137,16 @@ for (const c of CAUCES) {
   out.push({ id: c.id, name: c.name, c: line.map((p) => [+p[0].toFixed(4), +p[1].toFixed(4)]), km, len: Math.round(k), gauges });
   console.log(c.id.padEnd(12), `${osm[c.id].length} vías → cadena de ${line.length} puntos, ${Math.round(k)} km, ${gauges.length} puntos de medición`);
 }
-if (!ONLY) await writeFile(root('public/cauces.json'), JSON.stringify({ fuente: 'Trazas: © colaboradores de OpenStreetMap (ODbL). Alturas: INA, red de telemetría.', generado: new Date().toISOString().slice(0, 10), cauces: out }));
+if (!ONLY) await writeFile(root('layers/cauces.json'), JSON.stringify({ fuente: 'Trazas: © colaboradores de OpenStreetMap (ODbL). Alturas: INA, red de telemetría.', generado: new Date().toISOString().slice(0, 10), cauces: out }));
 else {
   let prev = { cauces: [] };
-  try { prev = JSON.parse(await readFile(root('public/cauces.json'), 'utf8')); } catch {}
+  try { prev = JSON.parse(await readFile(root('layers/cauces.json'), 'utf8')); } catch {}
   const m = new Map(prev.cauces.map((c) => [c.id, c]));
   for (const c of out) m.set(c.id, c);
-  await writeFile(root('public/cauces.json'), JSON.stringify({ ...prev, generado: new Date().toISOString().slice(0, 10), cauces: [...m.values()] }));
+  await writeFile(root('layers/cauces.json'), JSON.stringify({ ...prev, generado: new Date().toISOString().slice(0, 10), cauces: [...m.values()] }));
 }
 // series para el servidor (se unen a las que ya estaban)
 let ex = {};
 try { ex = JSON.parse(await readFile(root('sources/gauges-extra.json'), 'utf8')); } catch {}
 await writeFile(root('sources/gauges-extra.json'), JSON.stringify({ ...ex, ...extra }, null, 1));
-console.log('public/cauces.json:', out.length, 'cauces · sources/gauges-extra.json:', Object.keys({ ...ex, ...extra }).length, 'series');
+console.log('layers/cauces.json:', out.length, 'cauces · sources/gauges-extra.json:', Object.keys({ ...ex, ...extra }).length, 'series');

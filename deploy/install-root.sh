@@ -3,7 +3,7 @@
 #   sudo DOMAIN=caudal.ejemplo.org bash ~/caudal-seed/app/deploy/install-root.sh
 #
 # Qué hace (y nada más):
-#   1. instala Node.js desde apt si falta (Ubuntu 24.04 trae 18.x, alcanza)
+#   1. instala Node.js 22 LTS en /opt/node si falta (hace falta 22.13 o más nuevo: la base de datos usa node:sqlite)
 #   2. crea el usuario de sistema "caudal", sin shell ni login
 #   3. /opt/caudal/app  → el código, del usuario de deploy (se actualiza sin sudo)
 #      /opt/caudal/data → datos y cachés, solo del servicio
@@ -23,12 +23,20 @@ CF=/etc/caddy/Caddyfile
 [ "$(id -u)" = 0 ] || { echo "Hay que correrlo con sudo."; exit 1; }
 [ -d "$SEED/app" ] || { echo "No encuentro $SEED/app: primero hay que subir la semilla."; exit 1; }
 
-echo "── 1/6 Node.js"
-if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 18 ]; then
-  apt-get update -qq
-  apt-get install -y -qq nodejs
+echo "── 1/6 Node.js (22.13 o más nuevo)"
+NODE=/opt/node/bin/node
+node_ok() { [ -x "$1" ] && "$1" -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)'; }
+if ! node_ok "$NODE"; then
+  NV=22.23.4   # la versión con la que se probó
+  case "$(uname -m)" in x86_64) NA=x64 ;; aarch64) NA=arm64 ;; *) echo "Arquitectura no soportada: $(uname -m)"; exit 1 ;; esac
+  apt-get update -qq && apt-get install -y -qq curl ca-certificates xz-utils
+  TMPN=$(mktemp -d)
+  curl -fsSL -o "$TMPN/node.tar.xz" "https://nodejs.org/dist/v$NV/node-v$NV-linux-$NA.tar.xz"
+  curl -fsSL -o "$TMPN/SHASUMS256.txt" "https://nodejs.org/dist/v$NV/SHASUMS256.txt"
+  (cd "$TMPN" && grep " node-v$NV-linux-$NA.tar.xz$" SHASUMS256.txt | sed 's# node-v.*# node.tar.xz#' | sha256sum -c -)  # verifica la descarga
+  rm -rf /opt/node && mkdir -p /opt/node && tar -xJf "$TMPN/node.tar.xz" -C /opt/node --strip-components=1 && rm -rf "$TMPN"
 fi
-echo "   node $(node --version)"
+echo "   node $($NODE --version)"
 
 echo "── 2/6 usuario de servicio"
 id caudal >/dev/null 2>&1 || useradd --system --home-dir "$BASE" --shell /usr/sbin/nologin caudal
@@ -60,7 +68,7 @@ Type=simple
 User=caudal
 Group=caudal
 WorkingDirectory=$BASE/app
-ExecStart=/usr/bin/node $BASE/app/server.mjs
+ExecStart=$NODE $BASE/app/server.mjs
 Environment=PORT=$PORT
 Environment=HOST=127.0.0.1
 Environment=DATA_DIR=$BASE/data

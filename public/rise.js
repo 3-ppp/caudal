@@ -1,6 +1,6 @@
 // Cuánto sube el río (en metros) sobre su nivel mediano, en cada estación de caudal y cada fecha.
 //
-// Curva altura–caudal de cada estación, h = a + b·ln(Q): public/ratings.json (scripts/build-ratings.mjs)
+// Curva altura–caudal de cada estación, h = a + b·ln(Q): layers/ratings.json (scripts/build-ratings.mjs)
 // trae la pendiente b y el caudal mediano, ajustados con años de alturas de Prefectura/INA contra el
 // caudal GloFAS. Para las fechas desde la emisión del pronóstico del INA en ese puerto, la subida sigue
 // lo que pronostica el INA. Es una estimación: ver el README.

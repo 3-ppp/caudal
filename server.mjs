@@ -6,12 +6,15 @@
 // Fuente de caudal: GloFAS (Copernicus) vía Open-Meteo Flood API, modelo diario a 0.05°.
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
-import { initArchive, archiveGlofas, archiveHeights, archiveDam } from './archive.mjs';
+import { readFileSync } from 'node:fs';
+import { openStore, migrateLegacy } from './db.mjs';
 import { createHash } from 'node:crypto';
 import zlib, { gzipSync, brotliCompressSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createAnalytics } from './analytics.mjs';
+import { createReports } from './reports.mjs';
+import { createAccess } from './access.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
@@ -28,6 +31,11 @@ const CLIM_WINDOW = 10;                  // ± días alrededor de cada fecha del
 const API = 'https://flood-api.open-meteo.com/v1/flood';
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
+// Base de datos: todo el caudal, las alturas, las represas y las estadísticas viven en data/caudal.db (ver db.mjs).
+// Los JSON de versiones anteriores se importan la primera vez que arranca y quedan como respaldo.
+const store = openStore(DATA);
+await migrateLegacy(store, DATA, log);
+const ymd = (ms) => new Date(ms).toISOString().slice(0, 10);
 const readJSON = async (f) => JSON.parse(await readFile(f, 'utf8'));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -97,15 +105,13 @@ async function buildClimatology(st) {
 }
 
 async function ensureClimatology(stations) {
-  const file = path.join(DATA, 'climatology.json');
-  let clim = {};
-  try { clim = await readJSON(file); } catch {}
+  const clim = store.docsByPrefix('clim:');
   for (const st of stations) {
     const key = `${st.id}@${st.glat},${st.glon}`;
     if (clim[key]) continue;
     log(`climatología: ${st.id}…`);
     clim[key] = await buildClimatology(st);
-    await writeFile(file, JSON.stringify(clim));
+    store.setDoc('clim:' + key, clim[key]);
     await sleep(4000); // 25 años diarios pesan en la cuota por minuto de la API
   }
   return (st) => clim[`${st.id}@${st.glat},${st.glon}`];
@@ -149,8 +155,8 @@ async function refresh() {
       };
     }),
   };
-  await writeFile(path.join(DATA, 'latest.json'), JSON.stringify(out));
-  await archiveGlofas(out).catch((e) => log('archivo glofas:', e.message));
+  store.setDoc('latest', out);
+  try { store.putGlofas(out); } catch (e) { log('archivo glofas:', e.message); }
   log(`datos actualizados: ${out.stations.length} puntos, ${days[0]} → ${days.at(-1)}`);
 }
 
@@ -175,64 +181,43 @@ async function optionalImport(name) {
 // con el histórico de 30 días de la fuente (histFn); después se suma cada lectura nueva.
 const HEIGHT_RIVERS = /PARANA|PARAGUAY|IGUAZU|URUGUAY|BERMEJO|PILCOMAYO/;
 async function appendHeightHistory(pref, histFn, maxFetch = 5) {
-  const file = path.join(DATA, 'heights-history.json');
-  let h = {};
-  try { h = await readJSON(file); } catch {}
-  const cutoff = new Date(Date.now() - HISTORY_DAYS * 864e5).toISOString().slice(0, 10);
   // El sitio bloquea ráfagas (403): pocos pedidos por vuelta, espaciados, y se corta ante el primer error.
   // Con la actualización horaria, el histórico de todos los puertos se completa en unas horas.
   if (histFn) {
     let budget = maxFetch;
     for (const s of pref.stations) {
       const key = `${s.river}|${s.port}`;
-      if (!budget || !(HEIGHT_RIVERS.test(s.river) || s.grp) || Object.keys(h[key] || {}).length >= 5) continue;
+      if (!budget || !(HEIGHT_RIVERS.test(s.river) || s.grp) || store.heightCount(key) >= 5) continue;
       budget--;
       try {
-        for (const r of (await histFn(s)) || []) if (r.height_m != null) (h[key] ||= {})[r.date] = r.height_m;
+        store.putHeights(((await histFn(s)) || []).map((r) => [key, r.date, r.height_m]));
       } catch (e) { log(`historial ${s.port}: ${e.message} — se reintenta en la próxima vuelta`); break; }
       await sleep(4000);
     }
   }
-  for (const s of pref.stations) {
-    if (s.height_m == null || !s.date) continue;
-    const key = `${s.river}|${s.port}`;
-    (h[key] ||= {})[s.date] = s.height_m;
-    for (const d of Object.keys(h[key])) if (d < cutoff) delete h[key][d];
-  }
-  await writeFile(file, JSON.stringify(h));
-  await archiveHeights(h).catch((e) => log('archivo alturas:', e.message));
-  return h;
+  store.putHeights(pref.stations.filter((s) => s.height_m != null && s.date).map((s) => [`${s.river}|${s.port}`, s.date, s.height_m]));
 }
 
-// Serie de cada represa guardada en disco: se piden solo los días que faltan, como mucho una vez
+// Serie de cada represa guardada en la base: se piden solo los días que faltan, como mucho una vez
 // por día (Salto Grande se arma raspando su sitio, varios pedidos por día: hay que ser mesurado).
 const DAM_BACKFILL = { saltogrande: 30 }; // primera carga corta donde cada día cuesta varios pedidos
 async function fetchDam(id, fn) {
-  const file = path.join(DATA, `dam-${id}.json`);
-  let cache = { fetched: 0, source: '', series: [] };
-  try { cache = await readJSON(file); } catch {}
-  if (Date.now() - cache.fetched < 20 * 3600e3 && cache.series.length) return cache;
-  const lastDate = cache.series.at(-1)?.date;
+  const cutoff = ymd(Date.now() - HISTORY_DAYS * 864e5);
+  const have = store.getDam(id, cutoff);
+  if (have && Date.now() - have.fetched < 20 * 3600e3 && have.series.length) return have;
+  const lastDate = have?.series.at(-1)?.date;
   const missing = lastDate ? Math.ceil((Date.now() - Date.parse(lastDate)) / 864e5) + 2 : (DAM_BACKFILL[id] ?? PAST_DAYS);
   let r;
   try { r = await fn({ days: Math.min(missing, PAST_DAYS) }); }
-  catch (e) { if (cache.series.length) { log(`${id}: ${e.message} (se usa lo guardado)`); return cache; } throw e; }
-  const byDate = new Map(cache.series.map((s) => [s.date, s]));
-  for (const s of r.series) byDate.set(s.date, s); // los días recientes se reemplazan (los operadores corrigen)
-  const cutoff = new Date(Date.now() - HISTORY_DAYS * 864e5).toISOString().slice(0, 10);
-  cache = { fetched: Date.now(), source: r.source, unit: r.unit,
-    series: [...byDate.values()].filter((s) => s.date >= cutoff).sort((a, b) => a.date.localeCompare(b.date)) };
-  await writeFile(file, JSON.stringify(cache));
-  await archiveDam(id, cache.series).catch((e) => log('archivo represa:', e.message));
-  return cache;
+  catch (e) { if (have?.series.length) { log(`${id}: ${e.message} (se usa lo guardado)`); return have; } throw e; }
+  // los días recientes se reemplazan (los operadores corrigen)
+  store.putDam(id, { fetched: Date.now(), source: r.source, unit: r.unit }, r.series);
+  return store.getDam(id, cutoff);
 }
 
 async function refreshExtras() {
-  const file = path.join(DATA, 'extras.json');
-  let prev = {};
-  try { prev = await readJSON(file); } catch {}
-  const out = { updated: new Date().toISOString(), heights: prev.heights ?? null, history: prev.history ?? {},
-    dams: prev.dams ?? {}, satellite: prev.satellite ?? null, errors: {} };
+  const prev = store.getDoc('extras') ?? {};
+  const out = { updated: new Date().toISOString(), heights: prev.heights ?? null, satellite: prev.satellite ?? null, errors: {} };
 
   // Alturas: Prefectura; si no responde (su sitio no es alcanzable desde algunos servidores), el INA,
   // que republica sus lecturas. Los umbrales que falten salen de la última tabla conocida de Prefectura.
@@ -241,7 +226,7 @@ async function refreshExtras() {
   if (pref) {
     try {
       out.heights = await pref.fetchPrefectura();
-      out.history = await appendHeightHistory(out.heights, pref.fetchPrefecturaHistory && ((s) => s.id && pref.fetchPrefecturaHistory(s.id, 30)));
+      await appendHeightHistory(out.heights, pref.fetchPrefecturaHistory && ((s) => s.id && pref.fetchPrefecturaHistory(s.id, 30)));
       heightsOk = true;
     } catch (e) { out.errors.prefectura = e.message; }
   }
@@ -257,7 +242,7 @@ async function refreshExtras() {
         }
         h.via = 'INA';
         out.heights = h;
-        out.history = await appendHeightHistory(h, ina.fetchHeightsINAHistory && ((s) => ina.fetchHeightsINAHistory(s.port, 30)));
+        await appendHeightHistory(h, ina.fetchHeightsINAHistory && ((s) => ina.fetchHeightsINAHistory(s.port, 30)));
         delete out.errors.prefectura; // hay alturas: el respaldo cubrió la falla
         out.notes = { alturas: 'Prefectura no responde desde este servidor; alturas vía INA' };
       } catch (e) { out.errors.ina = e.message; }
@@ -271,7 +256,7 @@ async function refreshExtras() {
         const extra = await inaX.fetchHeightsINAExtra();
         const have = new Set(out.heights.stations.map((s) => `${s.river}|${s.port}`));
         out.heights.stations.push(...extra.filter((s) => !have.has(`${s.river}|${s.port}`)));
-        out.history = await appendHeightHistory({ stations: extra }, (s) => inaX.fetchHeightsINAHistory(s.port, 30), 15);
+        await appendHeightHistory({ stations: extra }, (s) => inaX.fetchHeightsINAHistory(s.port, 30), 15);
       } catch (e) { out.errors.ina_extra = e.message; }
     }
   }
@@ -279,7 +264,7 @@ async function refreshExtras() {
   if (dams) {
     for (const [id, fn] of [['itaipu', 'fetchItaipu'], ['yacyreta', 'fetchYacyreta'], ['saltogrande', 'fetchSaltoGrande']]) {
       if (!dams[fn]) continue;
-      try { out.dams[id] = await fetchDam(id, dams[fn]); }
+      try { await fetchDam(id, dams[fn]); }
       catch (e) { out.errors[id] = e.message; }
     }
   }
@@ -308,10 +293,12 @@ async function refreshExtras() {
     try { out.satellite = { latest: await sat.latestFloodDate(), layers: sat.LAYERS }; }
     catch (e) { out.errors.satellite = e.message; }
   }
-  await writeFile(file, JSON.stringify(out));
+  store.setDoc('extras', out); // las series de alturas y represas se arman desde sus tablas (ver composeExtras)
+  extrasVer++;
   const errs = Object.entries(out.errors).map(([k, v]) => `${k}: ${v}`).join('; ');
   log(`fuentes complementarias actualizadas${errs ? ` (errores → ${errs})` : ''}`);
 }
+let extrasVer = 1; // sube con cada actualización: invalida la respuesta armada de /api/extras
 let refreshingExtras = null;
 const safeRefreshExtras = () => (refreshingExtras ||= refreshExtras()
   .catch((e) => log('error en fuentes complementarias:', e.message))
@@ -472,11 +459,13 @@ const countOut = (url) => { const h = new URL(url).host; outbound[h] = (outbound
 // Límite simple por IP para los endpoints que pueden disparar pedidos externos
 // Holgado a propósito: con CGNAT (habitual en redes móviles) cientos de personas comparten una IP.
 // RATE_LIMIT=0 lo desactiva (pruebas de carga).
-const RATE = { tiles: [3000, 60e3], sat: [600, 60e3], hit: [120, 60e3] }; // [pedidos, ventana ms]
+// rep: reportes nuevos; vote: confirmaciones; rlist: lecturas del mapa de reportes; auth: pedidos a la herramienta de análisis
+const RATE = { tiles: [3000, 60e3], sat: [600, 60e3], hit: [120, 60e3], rep: [20, 3600e3], vote: [120, 60e3], rlist: [240, 60e3], auth: [600, 60e3] }; // [pedidos, ventana ms]
 const hits = new Map();
+const clientIp = (req) => (process.env.TRUST_PROXY && req.headers['x-forwarded-for']?.split(',')[0].trim()) || req.socket.remoteAddress || '';
 function rateLimited(req, kind) {
   if (process.env.RATE_LIMIT === '0') return false;
-  const ip = (process.env.TRUST_PROXY && req.headers['x-forwarded-for']?.split(',')[0].trim()) || req.socket.remoteAddress;
+  const ip = clientIp(req);
   const [max, win] = RATE[kind], key = kind + '|' + ip, now = Date.now();
   const h = hits.get(key);
   if (!h || now - h.t > win) { hits.set(key, { t: now, n: 1 }); return false; }
@@ -490,20 +479,43 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
   '.png': 'image/png', '.jpg': 'image/jpeg' };
 const COMPRESSIBLE = /^(text\/|application\/json|image\/svg)/;
 const fileCache = new Map(); // ruta → { mtimeMs, body, etag, type, gz, br }
+function makeEntry(body, type) {
+  const c = { body, type, etag: '"' + createHash('sha1').update(body).digest('base64url').slice(0, 16) + '"' };
+  if (COMPRESSIBLE.test(type) && body.length > 1024) {
+    c.br = brotliCompressSync(body, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 9 } });
+    c.gz = gzipSync(body, { level: 9 });
+  }
+  return c;
+}
 async function cachedFile(file) {
   const st = await stat(file);
   let c = fileCache.get(file);
   if (!c || c.mtimeMs !== st.mtimeMs) {
-    const body = await readFile(file);
-    c = { mtimeMs: st.mtimeMs, body, type: TYPES[path.extname(file)] || 'application/octet-stream',
-      etag: '"' + createHash('sha1').update(body).digest('base64url').slice(0, 16) + '"' };
-    if (COMPRESSIBLE.test(c.type) && body.length > 1024) {
-      c.br = brotliCompressSync(body, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 9 } });
-      c.gz = gzipSync(body, { level: 9 });
-    }
+    c = { mtimeMs: st.mtimeMs, ...makeEntry(await readFile(file), TYPES[path.extname(file)] || 'application/octet-stream') };
     fileCache.set(file, c);
   }
   return c;
+}
+// Respuestas armadas desde la base: se comprimen una sola vez por versión del dato
+const docEntries = new Map(); // nombre → { ver, entry }
+function docEntry(name, ver, build) {
+  const hit = docEntries.get(name);
+  if (hit && hit.ver === ver) return hit.entry;
+  const body = build();
+  if (body == null) return null;
+  const entry = makeEntry(Buffer.from(typeof body === 'string' ? body : JSON.stringify(body)), TYPES['.json']);
+  docEntries.set(name, { ver, entry });
+  return entry;
+}
+// extras = el documento guardado + las series de alturas (400 días) y de represas, que viven en sus tablas
+function composeExtras() {
+  const doc = store.getDoc('extras');
+  if (!doc) return null;
+  const cutoff = ymd(Date.now() - HISTORY_DAYS * 864e5);
+  doc.history = store.heightsSince(cutoff);
+  doc.dams = {};
+  for (const id of store.damIds()) { const d = store.getDam(id, cutoff); if (d) doc.dams[id] = d; }
+  return doc;
 }
 function send(req, res, c, cacheControl) {
   const headers = { 'content-type': c.type, 'cache-control': cacheControl, vary: 'accept-encoding' };
@@ -527,13 +539,12 @@ const imgType = (b) => (b[0] === 0xff && b[1] === 0xd8 ? 'image/jpeg' : 'image/p
 
 // ---------- estado de las fuentes (para monitoreo)
 async function health() {
-  const age = async (f) => { try { return Math.round((Date.now() - (await stat(path.join(DATA, f))).mtimeMs) / 60e3); } catch { return null; } };
-  let extras = {};
-  try { extras = await readJSON(path.join(DATA, 'extras.json')); } catch {}
-  const damLast = Object.fromEntries(Object.entries(extras.dams || {}).map(([k, d]) => [k, d?.series?.at(-1)?.date ?? null]));
+  const age = (name) => { const t = store.docUpdated(name); return t == null ? null : Math.round((Date.now() - t) / 60e3); };
+  const extras = store.getDoc('extras') ?? {};
+  const damLast = Object.fromEntries(store.all('SELECT dam, MAX(date) d FROM dam_series GROUP BY dam').map((r) => [r.dam, r.d]));
   const out = {
     ok: true,
-    minutes_since: { model: await age('latest.json'), extras: await age('extras.json') },
+    minutes_since: { model: age('latest'), extras: age('extras') },
     prefectura_reading: extras.heights?.fetchedAt ?? null,
     dams_last_day: damLast,
     satellite_latest: extras.satellite?.latest ?? null,
@@ -546,11 +557,108 @@ async function health() {
   return out;
 }
 
+// ---------- cuerpo JSON de los pedidos POST (con tope de tamaño)
+async function readBody(req, max = 4096) {
+  let body = '';
+  req.setEncoding('utf8');
+  for await (const chunk of req) { body += chunk; if (body.length > max) throw Object.assign(new Error('pedido demasiado grande'), { status: 413 }); }
+  if (!body) return {};
+  try { const j = JSON.parse(body); if (j && typeof j === 'object' && !Array.isArray(j)) return j; } catch {}
+  throw Object.assign(new Error('JSON inválido'), { status: 400 });
+}
+const sendJSON = (res, status, obj, extra = {}) => {
+  res.writeHead(status, { 'content-type': TYPES['.json'], 'cache-control': 'no-store', ...extra });
+  res.end(JSON.stringify(obj));
+};
+const deviceOf = (req) => ({ ip: clientIp(req), ua: req.headers['user-agent'] || '' });
+
+// ---------- acceso a la herramienta de análisis: la clave de administrador o un acceso de autoridad (Authorization: Bearer …)
+// Tras muchos intentos fallidos desde una IP se corta por un rato (contra adivinar claves).
+const authFails = new Map();
+function authorize(req, res, need) {
+  const ip = clientIp(req), f = authFails.get(ip), live = f && Date.now() - f.t < 600e3;
+  if (live && f.n >= 20 && process.env.RATE_LIMIT !== '0') { sendText(res, 429, 'demasiados intentos', { 'retry-after': '600' }); return null; }
+  if (rateLimited(req, 'auth')) { sendText(res, 429, 'demasiados pedidos', { 'retry-after': '60' }); return null; }
+  const role = access.roleOf((req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim());
+  if (!role) {
+    authFails.set(ip, { t: live ? f.t : Date.now(), n: (live ? f.n : 0) + 1 });
+    sendText(res, 401, 'acceso denegado'); return null;
+  }
+  if (need === 'admin' && role !== 'admin') { sendText(res, 403, 'solo el administrador'); return null; }
+  return role;
+}
+setInterval(() => { const now = Date.now(); for (const [k, f] of authFails) if (now - f.t > 600e3) authFails.delete(k); }, 60e3).unref();
+// capas de datos del mapa: solo para la herramienta de análisis (ver layers/)
+const LAYERS = new Set(['barrios', 'cauces', 'puertos', 'represas', 'municipios', 'ratings']);
+const PUBLIC_LAYERS = new Set(['cauces', 'puertos']); // los ríos y las escalas también se ven en el mapa público
+let publicReports = { t: 0, body: '' };
+
 // ---------- servidor estático + API
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
   try {
+    // --- reportes de vecinos (mapa público)
+    if (p === '/api/config') return sendJSON(res, 200, reports.config(), { 'cache-control': 'public, max-age=300' });
+    if (p === '/api/reportes' && req.method === 'GET') {
+      if (rateLimited(req, 'rlist')) return sendText(res, 429, 'demasiados pedidos', { 'retry-after': '60' });
+      if (Date.now() - publicReports.t > 10e3) publicReports = { t: Date.now(), body: JSON.stringify({ now: Date.now(), reportes: reports.publicList() }) };
+      res.writeHead(200, { 'content-type': TYPES['.json'], 'cache-control': 'public, max-age=10' });
+      return res.end(publicReports.body);
+    }
+    if (p === '/api/reportes' && req.method === 'POST') {
+      if (rateLimited(req, 'rep')) return sendJSON(res, 429, { error: 'Demasiados reportes desde tu conexión. Probá en un rato.' }, { 'retry-after': '600' });
+      const r = await reports.create(deviceOf(req), await readBody(req));
+      publicReports.t = 0; // el mapa lo muestra enseguida
+      if (r.status === 204) { res.writeHead(204); return res.end(); }
+      return sendJSON(res, r.status, r.body);
+    }
+    const vm = p.match(/^\/api\/reportes\/(\d+)\/voto$/);
+    if (vm && req.method === 'POST') {
+      if (rateLimited(req, 'vote')) return sendJSON(res, 429, { error: 'Demasiados pedidos. Probá en un minuto.' }, { 'retry-after': '60' });
+      const r = await reports.vote(deviceOf(req), +vm[1], await readBody(req));
+      publicReports.t = 0;
+      return sendJSON(res, r.status, r.body);
+    }
+    // --- herramienta de análisis (autoridades y administrador)
+    // datos públicos del mapa de reportes: localidades (sin teléfonos ni sitios web), ríos menores con sus boyas y escalas de Prefectura
+    if (p === '/api/localidades.json') {
+      const e = docEntry('localidades', 1, () => JSON.stringify({ localidades: JSON.parse(readFileSync(path.join(ROOT, 'layers', 'municipios.json'), 'utf8')).municipios
+        .filter((m) => m.c && m.pob).map((m) => ({ n: m.n, p: m.p, pob: m.pob, c: m.c })) }));
+      return send(req, res, e, 'public, max-age=3600');
+    }
+    const cm = p.match(/^\/api\/capas\/([a-z]+)\.json$/);
+    if (cm) {
+      if (!LAYERS.has(cm[1])) return sendText(res, 404, 'no encontrado');
+      if (PUBLIC_LAYERS.has(cm[1])) return send(req, res, await cachedFile(path.join(ROOT, 'layers', cm[1] + '.json')), 'public, no-cache');
+      if (!authorize(req, res)) return;
+      return send(req, res, await cachedFile(path.join(ROOT, 'layers', cm[1] + '.json')), 'private, no-cache');
+    }
+    if (p === '/api/analisis/yo') { const role = authorize(req, res); return role && sendJSON(res, 200, { role }); }
+    if (p === '/api/analisis/reportes') {
+      const role = authorize(req, res); if (!role) return;
+      const dias = Math.min(Math.max(+url.searchParams.get('dias') || 30, 1), 3650);
+      return sendJSON(res, 200, { now: Date.now(), role, reportes: reports.analysisList(dias, role === 'admin') });
+    }
+    const mm = p.match(/^\/api\/admin\/reportes\/(\d+)$/);
+    if (mm && req.method === 'POST') {
+      if (!authorize(req, res, 'admin')) return;
+      const b = await readBody(req);
+      if (b.accion !== 'ocultar' && b.accion !== 'mostrar') return sendJSON(res, 400, { error: 'acción inválida' });
+      const ok = reports.moderate(+mm[1], b.accion === 'ocultar');
+      publicReports.t = 0;
+      return sendJSON(res, ok ? 200 : 404, { ok });
+    }
+    if (p === '/api/admin/accesos') {
+      if (!authorize(req, res, 'admin')) return;
+      if (req.method === 'POST') { const b = await readBody(req); return sendJSON(res, 201, access.create(b.label)); }
+      return sendJSON(res, 200, { accesos: access.list() });
+    }
+    const am = p.match(/^\/api\/admin\/accesos\/(\d+)\/revocar$/);
+    if (am && req.method === 'POST') {
+      if (!authorize(req, res, 'admin')) return;
+      return sendJSON(res, 200, { ok: access.revoke(+am[1]) });
+    }
     // estadísticas: aviso de la página al elegir una localidad (cuerpo mínimo, sin cookies)
     if (p === '/api/hit' && req.method === 'POST') {
       if (rateLimited(req, 'hit')) return sendText(res, 429, '');
@@ -566,10 +674,13 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': TYPES['.html'], 'cache-control': 'no-store', 'x-robots-tag': 'noindex' });
       return res.end(analytics.report(stationNames, req.headers['x-forwarded-host'] || req.headers.host));
     }
-    if (p === '/api/data') return send(req, res, await cachedFile(path.join(DATA, 'latest.json')), 'public, max-age=300');
+    if (p === '/api/data') {
+      const e = docEntry('latest', store.docUpdated('latest'), () => store.getDocRow('latest')?.json);
+      return e ? send(req, res, e, 'public, max-age=300') : sendText(res, 503, 'datos todavía no disponibles');
+    }
     if (p === '/api/extras') {
-      try { return send(req, res, await cachedFile(path.join(DATA, 'extras.json')), 'public, max-age=300'); }
-      catch { return sendText(res, 200, '{}', { 'content-type': TYPES['.json'] }); }
+      const e = docEntry('extras', extrasVer, composeExtras);
+      return e ? send(req, res, e, 'public, max-age=300') : sendText(res, 200, '{}', { 'content-type': TYPES['.json'] });
     }
     if (p === '/health') {
       const h = await health();
@@ -603,32 +714,34 @@ const server = createServer(async (req, res) => {
       } catch (e) { return sendText(res, 404, e.message); }
     }
     if ((p === '/' || p === '/index.html' || p === '/mapa.html') && req.method === 'GET') analytics.pageView(req, p === '/mapa.html' ? 'mapa' : 'monitor', url.searchParams.get('via'));
-    const rel = p === '/' ? 'index.html' : decodeURIComponent(p).replace(/^\/+/, '');
+    const rel = p === '/' ? 'index.html' : p === '/analisis' ? 'analisis.html' : decodeURIComponent(p).replace(/^\/+/, '');
     const file = path.join(PUBLIC, rel);
     if (!file.startsWith(PUBLIC + path.sep)) return sendText(res, 403, 'prohibido');
     // no-cache + ETag: el navegador revalida y, si no cambió, recibe un 304 sin cuerpo
     return send(req, res, await cachedFile(file), 'no-cache');
   } catch (e) {
+    if (e.status) return sendText(res, e.status, e.message);
     if (p === '/api/data') return sendText(res, 503, 'datos todavía no disponibles');
     return sendText(res, 404, 'no encontrado');
   }
 });
 
 await mkdir(DATA, { recursive: true });
-await initArchive(DATA);
 const allStations = await loadStations();
 const stationNames = Object.fromEntries(allStations.map((s) => [s.id, s.kind === 'trib' ? `río ${s.name}` : s.name]));
-const analytics = await createAnalytics({ dataDir: DATA, ownHost: process.env.SITE_HOST || null,
+const analytics = await createAnalytics({ store, ownHost: process.env.SITE_HOST || null,
   stationIds: new Set(allStations.map((s) => s.id)), log });
+const access = createAccess({ store, isAdminKey: analytics.authorized });
+const reports = createReports({ store, log, turnstile: { site: process.env.TURNSTILE_SITE_KEY || null, secret: process.env.TURNSTILE_SECRET_KEY || null } });
 // al apagar (deploy, reinicio) se guardan los totales pendientes
-for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => analytics.flush().finally(() => process.exit(0)));
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => analytics.flush().catch(() => {}).finally(() => { try { store.close(); } catch {} process.exit(0); }));
 server.listen(PORT, HOST, () => log(`Caudal en http://${HOST}:${PORT} · datos en ${DATA}`));
 try {
-  const s = await stat(path.join(DATA, 'latest.json'));
+  const updated = store.docUpdated('latest');
   // se actualiza si los datos son viejos o si se agregaron puntos al río desde la última vez
-  const have = new Set((await readJSON(path.join(DATA, 'latest.json'))).stations.map((x) => x.id));
+  const have = new Set(store.getDoc('latest').stations.map((x) => x.id));
   const want = (await loadStations()).map((x) => x.id);
-  if (Date.now() - s.mtimeMs > REFRESH_MS || want.some((id) => !have.has(id))) safeRefresh();
+  if (Date.now() - updated > REFRESH_MS || want.some((id) => !have.has(id))) safeRefresh();
 } catch { safeRefresh(); }
 setInterval(safeRefresh, REFRESH_MS);
 safeRefreshExtras().then(warmPasses).then(warmTiles);

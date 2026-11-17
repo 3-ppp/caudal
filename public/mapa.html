@@ -3,32 +3,33 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>:~# caudal · mapa</title>
-  <meta name="description" content="Barrios populares y crecida de los ríos del Litoral y el Comahue sobre la imagen satelital: altura sobre el agua, boyas del INA, represas y estado de las rutas.">
+  <title>:~# caudal · mapa de reportes</title>
+  <meta name="description" content="Mapa colaborativo de reportes de vecinos: calles anegadas, agua en las viviendas y rutas cortadas en el Litoral y el Comahue, sobre la imagen satelital.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="caudal">
   <meta property="og:locale" content="es_AR">
-  <meta property="og:title" content="Mapa de barrios populares y crecida de los ríos">
-  <meta property="og:description" content="Altura de cada barrio sobre el agua, boyas del INA, represas del Comahue y estado de las rutas nacionales, día por día.">
+  <meta property="og:title" content="Mapa de reportes de inundaciones">
+  <meta property="og:description" content="Los vecinos marcan dónde hay agua: calles anegadas, viviendas afectadas, rutas cortadas. Sumá tu reporte.">
   <meta property="og:url" content="https://caudal.puaj.club/mapa.html">
   <meta property="og:image" content="https://caudal.puaj.club/og-mapa.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Mapa de barrios populares y crecida de los ríos">
-  <meta name="twitter:description" content="Altura de cada barrio sobre el agua, boyas del INA, represas del Comahue y estado de las rutas nacionales, día por día.">
+  <meta name="twitter:title" content="Mapa de reportes de inundaciones">
+  <meta name="twitter:description" content="Los vecinos marcan dónde hay agua: calles anegadas, viviendas afectadas, rutas cortadas. Sumá tu reporte.">
   <meta name="twitter:image" content="https://caudal.puaj.club/og-mapa.jpg">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="/favicon.svg">
   <script src="theme.js"></script>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="mapa.css">
+  <link rel="stylesheet" href="reportes.css">
 </head>
 <body class="mapa">
   <header class="statusbar" role="banner">
     <div class="sb-brand">
       <span class="sb-name"><span class="prompt" aria-hidden="true">:~#</span> caudal<span class="cursor" aria-hidden="true">_</span></span>
-      <span class="sb-sub">mapa · barrios y crecida</span>
+      <span class="sb-sub">mapa · reportes de vecinos</span>
     </div>
     <div class="sb-right">
       <a class="sb-link" href="./">monitor</a>
@@ -39,15 +40,17 @@
   </header>
 
   <main id="stage">
-    <div id="view" role="application" aria-label="Mapa de barrios populares sobre la imagen satelital" tabindex="0">
+    <div id="view" role="application" aria-label="Mapa de reportes de vecinos sobre la imagen satelital" tabindex="0">
       <div class="lyr" id="l-sat"></div>
       <svg id="vec" aria-hidden="false"></svg>
+      <div id="pin" hidden aria-hidden="true"></div>
     </div>
 
-    <div class="search">
-      <input id="q" type="search" placeholder="buscar barrio o localidad…" autocomplete="off" spellcheck="false" aria-label="Buscar barrio o localidad">
-      <ul id="q-res" hidden></ul>
-      <div class="zonas" role="group" aria-label="Ir a una zona"><button class="chip" id="go-lit" type="button">Litoral</button><button class="chip" id="go-com" type="button">Comahue · Vaca Muerta</button></div>
+    <div class="rep-top float" id="rep-top">
+      <p id="rep-count" class="small" aria-live="polite">cargando reportes…</p>
+      <p class="small muted">Avisos de vecinos, sin verificar · emergencias: <b>911</b></p>
+      <div class="zonas" role="group" aria-label="Ir a una zona"><button class="chip" id="go-lit" type="button">Litoral</button><button class="chip" id="go-com" type="button">Comahue · Vaca Muerta</button><button class="chip" id="go-me" type="button">mi ubicación</button></div>
+      <div class="ctx-tog"><label class="lyr-row"><input type="checkbox" id="c-loc" checked> <span>localidades</span></label><label class="lyr-row"><input type="checkbox" id="c-riv" checked> <span>ríos y medidores</span></label></div>
     </div>
 
     <div class="zoom-ctl" role="group" aria-label="Zoom del mapa">
@@ -56,33 +59,30 @@
       <button class="btn" id="zhome" type="button" aria-label="Ver toda la zona">⟲</button>
     </div>
 
-    <aside id="layers" class="float">
-      <details open>
-        <summary><span class="kicker">capas</span></summary>
-        <label class="lyr-row"><input type="checkbox" id="c-sat" checked> <span>satélite <span class="muted">· Sentinel-2, 2025</span></span></label>
-        <label class="lyr-row"><input type="checkbox" id="c-bar" checked> <span>barrios populares</span></label>
-        <div class="lyr-sub" id="bar-sum"></div>
-        <label class="lyr-row"><input type="checkbox" id="c-rut" checked> <span>estado de rutas nacionales</span></label>
-        <div class="lyr-sub" id="rut-sum"></div>
-        <label class="lyr-row"><input type="checkbox" id="c-loc" checked> <span>localidades</span></label>
-        <label class="lyr-row"><input type="checkbox" id="c-riv" checked> <span>ríos y puntos de medición</span></label>
-        <label class="lyr-row"><input type="checkbox" id="c-dam" checked> <span>represas del Comahue</span></label>
-      </details>
-    </aside>
-
     <aside id="card" class="float" hidden aria-live="polite"></aside>
 
-    <div id="timebar" class="float">
-      <button id="play" class="btn" type="button" aria-label="Reproducir">▶</button>
-      <div class="tb-mid">
-        <div class="tb-label"><strong id="date-label">—</strong> <span id="date-rel" class="muted"></span></div>
-        <input id="slider" type="range" min="0" max="0" value="0" aria-label="Fecha">
-        <div id="share"></div>
-      </div>
-      <button id="today" class="btn btn-text" type="button">hoy</button>
-    </div>
+    <button id="rep-btn" class="fab" type="button">+ reportar agua</button>
+    <div id="share-bar" class="float"><div id="share"></div></div>
 
-    <p class="attrib small muted">Imagen: Sentinel-2 cloudless © EOX · Barrios: RENABAP (CC BY 4.0) · Ríos menores y represas: © colaboradores de OpenStreetMap (ODbL) · Municipios: Mininterior · Rutas: IGN y Vialidad Nacional · Altura: SRTM (NASA). Estimación, no un aviso oficial.</p>
+    <form id="rep-form" class="float sheet" hidden autocomplete="off">
+      <p class="kicker">reportar</p>
+      <h2>¿Dónde es?</h2>
+      <label class="lbl" for="rep-loc">Escribí tu localidad…</label>
+      <div class="locsearch"><input id="rep-loc" type="text" placeholder="p. ej. Corrientes, Goya, Posadas" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="rep-loc-res"><ul id="rep-loc-res" role="listbox" hidden></ul></div>
+      <p class="small muted" id="rep-hint">…o mové el mapa con el dedo. La cruz marca el punto: acercate hasta ver la calle y dejala sobre el lugar exacto.</p>
+      <p class="lbl">¿Qué está pasando?</p>
+      <div class="opts" id="rep-kinds" role="radiogroup" aria-label="Qué está pasando"></div>
+      <p class="lbl">¿Cuánta agua hay?</p>
+      <div class="opts" id="rep-sevs" role="radiogroup" aria-label="Cuánta agua hay"></div>
+      <label class="lbl" for="rep-note">Nota (opcional)</label>
+      <textarea id="rep-note" maxlength="140" rows="1" placeholder="p. ej. agua hasta la rodilla en Junín y Bolívar"></textarea>
+      <input id="rep-hp" class="hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <details class="help"><summary class="small muted">qué se publica</summary><p class="small muted">Solo el punto marcado (redondeado a unos 100 m), el tipo, la cantidad de agua y tu nota, sin tu nombre ni tu IP. Un reporte dura 2 días; otros vecinos pueden confirmarlo o decir que ya bajó el agua. Son avisos de vecinos, sin verificar.</p></details>
+      <p id="rep-msg" class="small st wet" role="alert"></p>
+      <div class="row"><button class="btn btn-text" id="rep-cancel" type="button">cancelar</button><button class="btn btn-text btn-go" id="rep-send" type="submit">enviar reporte</button></div>
+    </form>
+
+    <p class="attrib small muted">Imagen: Sentinel-2 cloudless © EOX. Los reportes son de vecinos y no están verificados: no reemplazan los avisos oficiales.</p>
   </main>
   <div id="tip" class="tip" role="tooltip" hidden></div>
   <script src="mapa.js" type="module"></script>

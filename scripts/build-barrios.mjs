@@ -1,4 +1,4 @@
-// Genera public/barrios.json: barrios populares (RENABAP) a menos de MAX_KM de los ríos Paraná y Uruguay,
+// Genera layers/barrios.json: barrios populares (RENABAP) a menos de MAX_KM de los ríos Paraná y Uruguay,
 // con su altura estimada sobre el nivel del río.
 //   node scripts/build-barrios.mjs [archivo.geojson]
 // Si no se pasa un archivo, descarga el GeoJSON del Registro Nacional de Barrios Populares
@@ -102,9 +102,9 @@ const doc = {
   maxKm: MAX_KM, maxKmCauce: MAX_KM_CAUCE,
   barrios: out,
 };
-const file = root('public/barrios.json');
+const file = root('layers/barrios.json');
 await writeFile(file, JSON.stringify(doc));
 const kb = Buffer.byteLength(JSON.stringify(doc)) / 1024;
-console.log(`public/barrios.json: ${out.length} barrios, ${kb.toFixed(0)} KB`);
+console.log(`layers/barrios.json: ${out.length} barrios, ${kb.toFixed(0)} KB`);
 const hs = out.map((b) => b.h);
 console.log('altura sobre el río (m) · p10/p50/p90:', [0.1, 0.5, 0.9].map((q) => hs[Math.floor(q * (hs.length - 1))]).join(' / '));

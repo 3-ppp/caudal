@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>:~# caudal · análisis</title>
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/favicon.svg">
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mapa.css">
+  <link rel="stylesheet" href="reportes.css">
+</head>
+<body class="mapa">
+  <header class="statusbar" role="banner">
+    <div class="sb-brand">
+      <span class="sb-name"><span class="prompt" aria-hidden="true">:~#</span> caudal<span class="cursor" aria-hidden="true">_</span></span>
+      <span class="sb-sub">análisis · <span id="role">acceso restringido</span></span>
+    </div>
+    <div class="sb-right">
+      <a class="sb-link" href="mapa.html">mapa público</a>
+      <a class="sb-link" href="./">monitor</a>
+      <button id="theme" class="sb-btn" type="button" aria-label="Cambiar entre tema claro y oscuro">oscuro</button>
+    </div>
+  </header>
+
+  <main id="stage">
+    <div id="view" role="application" aria-label="Mapa de análisis sobre la imagen satelital" tabindex="0">
+      <div class="lyr" id="l-sat"></div>
+      <svg id="vec" aria-hidden="false"></svg>
+    </div>
+
+    <div class="search">
+      <input id="q" type="search" placeholder="buscar barrio o localidad…" autocomplete="off" spellcheck="false" aria-label="Buscar barrio o localidad">
+      <ul id="q-res" hidden></ul>
+      <div class="zonas" role="group" aria-label="Ir a una zona"><button class="chip" id="go-lit" type="button">Litoral</button><button class="chip" id="go-com" type="button">Comahue · Vaca Muerta</button></div>
+    </div>
+
+    <div class="zoom-ctl" role="group" aria-label="Zoom del mapa">
+      <button class="btn" id="zin" type="button" aria-label="Acercar">+</button>
+      <button class="btn" id="zout" type="button" aria-label="Alejar">−</button>
+      <button class="btn" id="zhome" type="button" aria-label="Ver toda la zona">⟲</button>
+    </div>
+
+    <aside id="layers" class="float">
+      <details open>
+        <summary><span class="kicker">capas</span></summary>
+        <label class="lyr-row"><input type="checkbox" id="c-sat" checked> <span>satélite <span class="muted">· Sentinel-2, 2025</span></span></label>
+        <label class="lyr-row"><input type="checkbox" id="c-rep" checked> <span>reportes de vecinos</span></label>
+        <div class="lyr-sub">
+          <select id="rep-days" aria-label="Período de los reportes">
+            <option value="1">últimas 24 h</option>
+            <option value="7">últimos 7 días</option>
+            <option value="30" selected>últimos 30 días</option>
+            <option value="90">últimos 90 días</option>
+            <option value="365">último año</option>
+          </select>
+          <label class="lyr-row" id="rep-hid-row" hidden><input type="checkbox" id="rep-hid"> <span>ver los ocultos por moderación</span></label>
+          <div id="rep-sum"></div>
+        </div>
+        <label class="lyr-row"><input type="checkbox" id="c-bar" checked> <span>barrios populares</span></label>
+        <div class="lyr-sub" id="bar-sum"></div>
+        <label class="lyr-row"><input type="checkbox" id="c-rut" checked> <span>estado de rutas nacionales</span></label>
+        <div class="lyr-sub" id="rut-sum"></div>
+        <label class="lyr-row"><input type="checkbox" id="c-loc" checked> <span>localidades</span></label>
+        <label class="lyr-row"><input type="checkbox" id="c-riv" checked> <span>ríos y puntos de medición</span></label>
+        <label class="lyr-row"><input type="checkbox" id="c-dam" checked> <span>represas del Comahue</span></label>
+        <details id="acc" class="help" hidden>
+          <summary class="muted small">accesos de autoridades</summary>
+          <p class="small muted">Cada enlace da acceso de solo lectura a esta herramienta. Crealo para quien lo necesite y revocalo cuando termine.</p>
+          <form id="acc-form" class="acc-form"><input id="acc-label" type="text" maxlength="80" placeholder="para quién (p. ej. Defensa Civil Corrientes)" autocomplete="off"><button class="btn btn-text" type="submit">crear</button></form>
+          <div id="acc-new"></div>
+          <div id="acc-list"></div>
+        </details>
+      </details>
+    </aside>
+
+    <aside id="card" class="float" hidden aria-live="polite"></aside>
+
+    <div id="timebar" class="float">
+      <button id="play" class="btn" type="button" aria-label="Reproducir">▶</button>
+      <div class="tb-mid">
+        <div class="tb-label"><strong id="date-label">—</strong> <span id="date-rel" class="muted"></span></div>
+        <input id="slider" type="range" min="0" max="0" value="0" aria-label="Fecha">
+      </div>
+      <button id="today" class="btn btn-text" type="button">hoy</button>
+    </div>
+
+    <p class="attrib small muted">Imagen: Sentinel-2 cloudless © EOX · Barrios: RENABAP (CC BY 4.0) · Ríos menores y represas: © colaboradores de OpenStreetMap (ODbL) · Municipios: Mininterior · Rutas: IGN y Vialidad Nacional · Altura: SRTM (NASA). Estimación, no un aviso oficial. Los reportes son de vecinos y no están verificados.</p>
+  </main>
+
+  <div id="login" class="login" hidden>
+    <form id="login-form" class="float login-box" autocomplete="off">
+      <p class="kicker">análisis</p>
+      <h2>Herramienta para administración y autoridades</h2>
+      <p class="small muted">Reúne las capas (barrios, ríos, rutas, represas) y los reportes de vecinos. Si te dieron un enlace, abrilo tal cual; si te dieron un código, pegalo acá.</p>
+      <input id="login-key" type="password" placeholder="código de acceso" autocomplete="off" spellcheck="false" required>
+      <p id="login-msg" class="small st wet" role="alert"></p>
+      <div class="row"><button class="btn btn-text" type="submit">entrar</button><a class="small" href="mapa.html">ir al mapa público</a></div>
+    </form>
+  </div>
+  <div id="tip" class="tip" role="tooltip" hidden></div>
+  <script src="analisis.js" type="module"></script>
+</body>
+</html>

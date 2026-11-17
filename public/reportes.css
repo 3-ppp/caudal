@@ -1,0 +1,77 @@
+/* Reportes de vecinos: marcadores, formulario del mapa público y pantalla de ingreso de la herramienta de análisis. */
+
+/* marcadores (cada tipo tiene color y forma) */
+#vec .rp { stroke: #fff; stroke-width: 1.8px; stroke-linejoin: round; pointer-events: none; }
+#vec .rp.k-calle { fill: #3b82f6; } #vec .rp.k-casas { fill: #ef4444; } #vec .rp.k-ruta { fill: #f59e0b; } #vec .rp.k-rio { fill: #14b8a6; }
+#vec .rp.sel { stroke: #ffd400; stroke-width: 3px; }
+#vec .rp.hid { fill-opacity: 0.25; stroke: var(--ink-3); stroke-dasharray: 3 2; }
+.rp-sw { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; flex: none; }
+.rp-sw.k-calle { background: #3b82f6; border-radius: 50%; } .rp-sw.k-casas { background: #ef4444; }
+.rp-sw.k-ruta { background: #f59e0b; clip-path: polygon(50% 0, 100% 100%, 0 100%); } .rp-sw.k-rio { background: #14b8a6; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.rp-note { font-style: italic; margin: 6px 0 0; overflow-wrap: anywhere; }
+.rp-key { display: inline-flex; align-items: baseline; margin-right: 8px; cursor: pointer; white-space: nowrap; }
+.rp-key input { accent-color: var(--accent); margin: 0 4px 0 0; }
+#card .st.na { color: var(--ink-3); }
+
+/* mapa público */
+.rep-top { top: 10px; left: 10px; width: 300px; padding: 6px 10px 8px; z-index: 6; }
+.rep-top p { margin: 2px 0; }
+.rep-top .zonas { margin-top: 6px; flex-wrap: wrap; }
+.fab { position: absolute; z-index: 7; left: 50%; bottom: 74px; transform: translateX(-50%); font: 600 15px var(--mono); color: #fff; background: var(--st-critical); border: 1px solid var(--ink); padding: 8px 18px; cursor: pointer; box-shadow: 3px 3px 0 var(--ink); }
+.fab:hover { filter: brightness(1.1); }
+.fab[hidden], #share-bar[hidden], .sheet[hidden], #pin[hidden] { display: none; }
+#share-bar { left: 50%; bottom: 26px; transform: translateX(-50%); padding: 3px 12px; }
+.sheet { left: 50%; bottom: 10px; transform: translateX(-50%); width: min(440px, calc(100% - 20px)); max-height: calc(100% - 20px); overflow: auto; padding: 8px 14px 12px; z-index: 8; }
+.sheet h2 { font-size: 15px; margin: 0 0 2px; }
+.sheet .lbl { display: block; margin: 8px 0 3px; font-size: 12.5px; color: var(--ink-2); }
+.sheet textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; padding: 4px 6px; background: var(--bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 0; resize: vertical; }
+.sheet .row, .login-box .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 8px; }
+.btn-go { background: var(--st-critical); color: #fff; border-color: var(--ink); padding: 3px 12px; }
+.btn-go:disabled { opacity: 0.45; cursor: not-allowed; }
+.opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.opt { cursor: pointer; }
+.opt input { position: absolute; opacity: 0; pointer-events: none; }
+.opt span { display: inline-flex; align-items: baseline; font-size: 12.5px; padding: 3px 9px; background: var(--bg); border: 1px solid var(--rule); }
+.opt input:checked + span { border-color: var(--ink); background: var(--code-bg); color: var(--code-ink); box-shadow: 2px 2px 0 var(--rule); }
+.opt input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+/* la cruz del centro del mapa mientras se reporta */
+#pin { position: absolute; z-index: 4; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; pointer-events: none; }
+@media (min-width: 761px) { .sheet { left: auto; right: 10px; transform: none; width: 380px; max-height: calc(100% - 20px); } }
+#pin::before, #pin::after { content: ""; position: absolute; background: #fff; box-shadow: 0 0 0 1.5px #000; }
+#pin::before { left: 16px; top: 0; width: 2px; height: 34px; } #pin::after { top: 16px; left: 0; height: 2px; width: 34px; }
+body.reporting #card { display: none; }
+.votes { display: flex; gap: 8px; margin-top: 8px; }
+.votes .btn.on { background: var(--code-bg); color: var(--code-ink); }
+.cf-box { position: fixed; z-index: 100; left: 50%; bottom: 12px; transform: translateX(-50%); }
+
+/* herramienta de análisis: ingreso y accesos */
+.login { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(3px); }
+.login[hidden] { display: none; }
+.login-box { position: static; width: min(380px, calc(100% - 24px)); padding: 10px 16px 14px; }
+.login-box h2 { font-size: 16px; margin: 0 0 6px; }
+.login-box input { width: 100%; box-sizing: border-box; font: inherit; padding: 5px 8px; background: var(--bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 0; margin-top: 6px; }
+.acc-form { display: flex; gap: 6px; margin: 4px 0; }
+.acc-form input { flex: 1; min-width: 0; font: inherit; font-size: 12px; padding: 2px 4px; background: var(--bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 0; }
+.acc-url { width: 100%; box-sizing: border-box; font: 11px var(--mono); padding: 3px 4px; background: var(--code-bg); color: var(--code-ink); border: 0; }
+.acc { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12px; }
+.acc li { margin: 2px 0; } .acc li.off { opacity: 0.55; }
+
+@media (max-width: 760px) {
+  .rep-top { top: 8px; left: 8px; right: 62px; width: auto; }
+  .fab { bottom: 70px; }
+  #card:not([hidden]) ~ .fab { display: none; }
+  .sheet { bottom: 4px; max-height: 78%; }
+  body.reporting .rep-top, body.reporting .zoom-ctl { display: none; }
+}
+.lyr-row[hidden] { display: none; }
+
+/* localidades, ríos y medidores en el mapa público; buscador de localidad del formulario */
+.ctx-tog { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 12px; }
+.ctx-tog .lyr-row { padding: 0; }
+.locsearch input { width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; padding: 4px 6px; background: var(--bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 0; }
+.locsearch ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--rule); border-top: 0; max-height: 170px; overflow: auto; background: var(--bg); }
+.locsearch li { padding: 5px 8px; font-size: 13px; cursor: pointer; }
+.locsearch li.on, .locsearch li:hover { background: var(--code-bg); color: var(--code-ink); }
+.locsearch li small { color: var(--ink-2); } .locsearch li.on small, .locsearch li:hover small { color: inherit; }
+.gauge-card { font-size: 12.5px; line-height: 1.45; } .gauge-card .row { display: flex; justify-content: space-between; gap: 10px; }

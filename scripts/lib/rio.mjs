@@ -60,7 +60,7 @@ export async function createRio() {
   }
   // cauces menores (scripts/build-cauces.mjs): ríos chicos con boyas del INA. Se identifican con el prefijo "c:"
   let cauces = [];
-  try { cauces = JSON.parse(await readFile(root('public/cauces.json'), 'utf8')).cauces; } catch {}
+  try { cauces = JSON.parse(await readFile(root('layers/cauces.json'), 'utf8')).cauces; } catch {}
   for (const c of cauces) stems['c:' + c.id] = { c: c.c, km: c.km };
   const river = [];
   for (const [name, s] of Object.entries(stems)) s.c.forEach((c, i) => river.push({ river: name, c, km: s.km[i], i }));

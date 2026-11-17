@@ -1,4 +1,4 @@
-// Genera public/represas.json: las represas del Comahue (Limay y Neuquén), que regulan el caudal de la cuenca de Vaca Muerta.
+// Genera layers/represas.json: las represas del Comahue (Limay y Neuquén), que regulan el caudal de la cuenca de Vaca Muerta.
 //   node scripts/build-represas.mjs
 // La lista es curada a mano: se eligieron las represas y diques con nombre de OpenStreetMap (© colaboradores, ODbL) dentro de la
 // cuenca; las coordenadas son las del dique o la central en OSM, y la potencia, la que figura en OSM para la central.
@@ -20,8 +20,8 @@ const REPRESAS = [
   { n: 'El Chañar', rio: 'Neuquén', lat: -38.583, lon: -68.401, nota: 'Complejo Cerros Colorados' },
   { n: 'Ingeniero Ballester', rio: 'Neuquén', lat: -38.726, lon: -68.173, nota: 'dique derivador del riego del Alto Valle' },
 ];
-await writeFile(root('public/represas.json'), JSON.stringify({
+await writeFile(root('layers/represas.json'), JSON.stringify({
   fuente: 'Ubicación y potencia: OpenStreetMap (© colaboradores, ODbL). Lista curada a mano.',
   generado: new Date().toISOString().slice(0, 10), represas: REPRESAS,
 }));
-console.log('public/represas.json:', REPRESAS.length, 'represas');
+console.log('layers/represas.json:', REPRESAS.length, 'represas');

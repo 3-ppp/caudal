@@ -1,4 +1,4 @@
-// Genera public/municipios.json: gobiernos locales de las provincias de la zona, con su población (Censo 2022),
+// Genera layers/municipios.json: gobiernos locales de las provincias de la zona, con su población (Censo 2022),
 // las inundaciones reportadas entre 1999 y 2022, el teléfono y el sitio web.
 //   node scripts/build-municipios.mjs
 //
@@ -44,7 +44,7 @@ const doc = {
   fuente: 'Registro Federal de Gobiernos Locales (ReFeGLo) · Ministerio del Interior · datos.gob.ar · CC BY 4.0',
   periodo: '1999-2022', generado: new Date().toISOString().slice(0, 10), municipios: out,
 };
-await writeFile(root('public/municipios.json'), JSON.stringify(doc));
-console.log(`public/municipios.json: ${out.length} gobiernos locales (${(Buffer.byteLength(JSON.stringify(doc)) / 1024).toFixed(0)} KB)`);
+await writeFile(root('layers/municipios.json'), JSON.stringify(doc));
+console.log(`layers/municipios.json: ${out.length} gobiernos locales (${(Buffer.byteLength(JSON.stringify(doc)) / 1024).toFixed(0)} KB)`);
 const con = out.filter((m) => m.inu != null);
 console.log(`con dato de inundaciones: ${con.length}; con alguna reportada: ${con.filter((m) => m.inu > 0).length}; máx: ${Math.max(...con.map((m) => m.inu))} (${con.sort((a, b) => b.inu - a.inu)[0].n})`);

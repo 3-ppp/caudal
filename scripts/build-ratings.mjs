@@ -1,4 +1,4 @@
-// Genera public/ratings.json: por estación de caudal, cuántos metros sube el río por cada vez que se
+// Genera layers/ratings.json: por estación de caudal, cuántos metros sube el río por cada vez que se
 // multiplica el caudal (pendiente b de h = a + b·ln Q) y su caudal mediano de referencia.
 // Se ajusta con años de alturas diarias (escalas de Prefectura vía INA) contra el caudal GloFAS en la
 // misma estación. La capa de barrios lo usa para convertir caudal en subida del río.
@@ -90,9 +90,9 @@ for (const [id, port] of Object.entries(OBS)) {
   out[id] = { obs: true, port, river: 'PARAGUAY', hmed: +median(v).toFixed(2), n: v.length };
   console.log(id.padEnd(13), `altura mediana ${out[id].hmed} m (${port}, n=${v.length})`);
 }
-// Cauces menores (public/cauces.json): igual que el Paraguay, solo la altura medida contra su mediana
+// Cauces menores (layers/cauces.json): igual que el Paraguay, solo la altura medida contra su mediana
 try {
-  const { cauces } = JSON.parse(await readFile(new URL('public/cauces.json', ROOT), 'utf8'));
+  const { cauces } = JSON.parse(await readFile(new URL('layers/cauces.json', ROOT), 'utf8'));
   for (const c of cauces) for (const g of c.gauges) {
     if (ONLY && !ONLY.includes(g.id) && !ONLY.includes('cauces')) continue;
     let hist;
@@ -104,10 +104,10 @@ try {
   }
 } catch (e) { console.log('cauces:', e.message); }
 if (ONLY) { // se conservan las curvas de las demás estaciones
-  try { Object.assign(out, { ...JSON.parse(await readFile(new URL('public/ratings.json', ROOT), 'utf8')).estaciones, ...out }); } catch {}
+  try { Object.assign(out, { ...JSON.parse(await readFile(new URL('layers/ratings.json', ROOT), 'utf8')).estaciones, ...out }); } catch {}
 }
-await writeFile(new URL('public/ratings.json', ROOT), JSON.stringify({
+await writeFile(new URL('layers/ratings.json', ROOT), JSON.stringify({
   generado: ymd(Date.now()), anios: YEARS,
   nota: 'b = metros de subida por unidad de ln(caudal); qref = caudal GloFAS mediano del período.', estaciones: out,
 }));
-console.log('public/ratings.json:', Object.keys(out).length, 'estaciones');
+console.log('layers/ratings.json:', Object.keys(out).length, 'estaciones');

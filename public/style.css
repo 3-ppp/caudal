@@ -243,6 +243,16 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: 8px 0 2p
 .time input[type=range] { display: block; width: 100%; margin: 2px 0 0; }
 .time-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-2); line-height: 1.1; }
 
+/* nada fuerza el ancho de la página en pantallas muy angostas (320 px) */
+.foot-status .sb-sources { max-width: 100%; min-width: 0; }
+.foot-status .sb-sources li { white-space: normal; min-width: 0; }
+@media (max-width: 600px) {
+  .time { padding: 5px 8px; gap: 8px; }
+  .time .btn { padding-left: 6px; padding-right: 6px; }
+  /* la fecha puede partirse en dos líneas en vez de cortarse con puntos suspensivos */
+  .time-label { white-space: normal; overflow: visible; text-overflow: clip; }
+}
+
 /* ---------- figuras (matplotlib) */
 .chart { width: 100%; height: auto; display: block; overflow: visible; background: var(--fig); padding: 6px 4px 2px; }
 .chart text, #map text { font-family: var(--plot); }

@@ -866,9 +866,13 @@ $('#t-start').textContent = dShort(days[0]);
 $('#t-end').textContent = dShort(days.at(-1));
 // posiciona la etiqueta "hoy" en su lugar real de la escala
 $('.time-scale span:nth-child(2)').style.cssText = `position:relative;left:${((todayIdx / (days.length - 1)) - 0.5) * 100}%`;
+// en pantallas angostas la fecha va abreviada ("mié, 18 nov 2026") para que entre junto a "hoy" o "pronóstico · en N días"
+const narrowMQ = matchMedia('(max-width: 600px)');
+const dLabel = (iso) => parseDay(iso).toLocaleDateString('es-AR', narrowMQ.matches ? { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' } : { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).replace(/\./g, '');
+narrowMQ.addEventListener('change', () => drawTime());
 function drawTime() {
   slider.value = T;
-  $('#date-label').textContent = dLong(days[T]);
+  $('#date-label').textContent = dLabel(days[T]);
   const n = T - todayIdx;
   $('#date-rel').textContent = n === 0 ? 'hoy' : n < 0 ? `hace ${-n} día${n === -1 ? '' : 's'}` : `pronóstico · en ${n} día${n === 1 ? '' : 's'}`;
 }

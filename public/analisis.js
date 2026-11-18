@@ -283,32 +283,6 @@ function tipRep(i) {
   const r = REP.items[i];
   return `<b>${esc(KIND[r.k].n)}</b> <span class="muted">· ${ago(r.t, repState.now)}</span><br>${esc(SEV[r.s])}${r.n ? `<br><span class="muted">“${esc(r.n.slice(0, 80))}”</span>` : ''}`;
 }
-// ---------- accesos (solo administración): crear y revocar los accesos de lectura para autoridades
-async function drawAccesos() {
-  const { accesos } = await json('/api/admin/accesos');
-  const f = (ms) => (ms ? new Date(ms).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }).replace('.', '') : '—');
-  $('#acc-list').innerHTML = accesos.length ? `<ul class="acc">${accesos.map((a) =>
-    `<li class="${a.revoked ? 'off' : ''}"><b>${esc(a.label)}</b> <span class="muted">· creado ${f(a.created)}${a.last_used ? ` · usado ${f(a.last_used)}` : ''}${a.revoked ? ' · revocado' : ''}</span>${a.revoked ? '' : ` <button class="lnk" data-rev="${a.id}" type="button">revocar</button>`}</li>`).join('')}</ul>` : '<p class="small muted">Todavía no hay accesos de autoridad.</p>';
-}
-if (ADMIN) {
-  $('#acc').hidden = false;
-  drawAccesos().catch(() => {});
-  $('#acc-form').addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    const label = $('#acc-label').value.trim();
-    if (!label) return;
-    const { token } = await post('/api/admin/accesos', { label });
-    $('#acc-label').value = '';
-    $('#acc-new').innerHTML = `<p class="small">Enlace para <b>${esc(label)}</b> (se muestra una sola vez; quien lo abre queda con acceso de lectura):</p><input class="acc-url" readonly value="${location.origin}/analisis#k=${token}">`;
-    $('#acc-new .acc-url').select();
-    drawAccesos();
-  });
-  $('#acc-list').addEventListener('click', async (ev) => {
-    const id = ev.target.dataset.rev;
-    if (id && confirm('¿Revocar este acceso? Deja de funcionar enseguida.')) { await post(`/api/admin/accesos/${id}/revocar`); drawAccesos(); }
-  });
-}
-
 // ---------- localidades: gobiernos locales de las ocho provincias (población del Censo 2022) y las ciudades vecinas de las otras
 // orillas (población aproximada, solo para ordenar). Criterio: cuanto más cerca el zoom, más chica la población mínima.
 const VECINAS = [

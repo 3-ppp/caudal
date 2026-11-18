@@ -136,12 +136,17 @@ $('#c-riv').addEventListener('change', () => schedule());
 let voted = {};
 try { voted = JSON.parse(sessionStorage.getItem('votos') || '{}'); } catch {}
 let CAPTCHA = null; // clave pública de Turnstile (null: el servidor no la pide)
-fetch('/api/config').then((r) => r.json()).then((c) => { CAPTCHA = c.captcha || null; }).catch(() => {});
+// el servidor puede pausar los reportes nuevos (interruptor de emergencia del panel de administración): el mapa sigue mostrando lo que hay
+let PAUSED = false;
+function setPaused(on) { PAUSED = on; $('#rep-btn').hidden = on || !form.hidden; $('#rep-paused').hidden = !on; }
+const loadConfig = () => fetch('/api/config').then((r) => r.json()).then((c) => { CAPTCHA = c.captcha || null; setPaused(c.reportes === false); }).catch(() => {});
+loadConfig();
 
 function drawCard() {
   const r = REP.items.find((x) => x.id === selected), card = $('#card');
   if (!r) { card.hidden = true; return; }
   const near = REP.nearby(r), v = voted[r.id];
+  const young = serverNow - r.t < 2 * 3600e3; // "ya bajó" recién se puede votar cuando el reporte tiene 2 horas
   card.innerHTML = `<button class="btn x" id="card-x" type="button" aria-label="Cerrar">x</button>` +
     `<p class="kicker">reporte-de-vecinos</p><h2><i class="rp-sw k-${r.k}"></i> ${esc(KIND[r.k].n)}</h2><div class="muted">${ago(r.t, serverNow)} · ${repDate(r.t)}</div>` +
     `<dl><dt>Cuánta agua</dt><dd>${esc(SEV[r.s])}</dd>` +
@@ -150,7 +155,7 @@ function drawCard() {
     `<dt>Cerca (300 m, 24 h)</dt><dd>${near ? `${near} reporte${near === 1 ? '' : 's'} más` : 'ninguno'}</dd></dl>` +
     (r.n ? `<p class="rp-note">“${esc(r.n)}”</p>` : '') +
     `<p class="small muted">Dato de un vecino, sin verificar. Ubicación aproximada.</p>` +
-    `<div class="row votes"><button class="btn btn-text${v === 'sigue' ? ' on' : ''}" data-v="sigue" type="button">sigue así</button><button class="btn btn-text${v === 'bajo' ? ' on' : ''}" data-v="bajo" type="button">ya bajó</button></div>` +
+    `<div class="row votes"><button class="btn btn-text${v === 'sigue' ? ' on' : ''}" data-v="sigue" type="button">sigue así</button><button class="btn btn-text${v === 'bajo' ? ' on' : ''}" data-v="bajo" type="button"${young ? ' disabled data-lock="1" title="Se puede confirmar que ya bajó pasadas 2 horas del reporte"' : ''}>ya bajó</button></div>` +
     `<p id="vote-msg" class="small muted" role="status"></p>`;
   card.hidden = false;
   $('#card-x').addEventListener('click', () => select(-1));
@@ -172,7 +177,7 @@ function drawCard() {
       btns.forEach((x) => { x.classList.toggle('on', x === b); });
       loadReports();
     } catch (e) { msg.textContent = e.message; }
-    btns.forEach((x) => { x.disabled = false; });
+    btns.forEach((x) => { x.disabled = x.dataset.lock === '1'; });
   });
 }
 function select(id) {
@@ -437,7 +442,7 @@ function openForm() {
 }
 function closeForm() {
   lockedPt = null;
-  form.hidden = true; pin.hidden = true; $('#rep-btn').hidden = false; $('#share-bar').hidden = false;
+  form.hidden = true; pin.hidden = true; $('#rep-btn').hidden = PAUSED; $('#share-bar').hidden = false;
   document.body.classList.remove('reporting');
 }
 // con el mapa muy alejado el punto no es preciso: se pide acercarse antes de enviar
@@ -487,5 +492,5 @@ form.addEventListener('submit', async (ev) => {
   loadContext();
   await loadReports();
   if (m?.[4] && REP.items.some((r) => r.id === +m[4])) select(+m[4]);
-  setInterval(() => { if (!document.hidden) loadReports(); }, 60e3);
+  setInterval(() => { if (!document.hidden) { loadReports(); loadConfig(); } }, 60e3);
 }

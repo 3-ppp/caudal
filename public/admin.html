@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="color-scheme" content="light dark">
+  <title>:~# caudal · panel</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div id="login" class="login" hidden>
+    <form id="login-form" class="login-box" autocomplete="off">
+      <h1>:~# caudal_</h1>
+      <p>Panel de administración y autoridades. Si te dieron un enlace, abrilo tal cual; si te dieron un código, pegalo acá.</p>
+      <input id="login-key" type="password" placeholder="código de acceso" autocomplete="off" spellcheck="false" required>
+      <p id="login-msg" class="err" role="alert"></p>
+      <button class="btn btn-primary" type="submit">Entrar</button>
+    </form>
+  </div>
+
+  <div id="app" class="app" hidden>
+    <aside class="side">
+      <div class="brand">:~# caudal_</div>
+      <div class="who" id="role">—</div>
+      <button class="nav on" data-view="reportes" type="button"><span>Reportes</span><span class="count" id="n-rep"></span></button>
+      <button class="nav" data-view="accesos" id="nav-acc" type="button" hidden><span>Accesos</span></button>
+      <div class="grp">Herramientas</div>
+      <a class="nav sub" href="/analisis"><span>Mapa de análisis</span><span>↗</span></a>
+      <a class="nav sub" href="/mapa"><span>Mapa público</span><span>↗</span></a>
+      <a class="nav sub" href="/"><span>Monitor de caudal</span><span>↗</span></a>
+      <a class="nav sub" id="nav-stats" href="#" target="_blank" rel="noopener noreferrer" hidden><span>Estadísticas</span><span>↗</span></a>
+      <div class="side-foot"><button class="btn sm" id="theme" type="button">tema</button><button class="btn sm" id="logout" type="button">salir</button></div>
+    </aside>
+
+    <main class="main">
+      <section id="v-reportes">
+        <header class="head"><h1>Reportes</h1><p class="sub" id="sub">cargando…</p></header>
+        <div class="ctl" id="ctl" hidden>
+          <span class="pill" id="ctl-state">—</span>
+          <span class="ctl-info" id="ctl-info"></span>
+          <button class="btn sm" id="ctl-toggle" type="button">—</button>
+          <label class="ctl-tope">Tope por hora <input id="ctl-tope" type="number" min="10" max="100000" step="10" aria-label="Tope de reportes por hora"> <button class="btn sm" id="ctl-save" type="button">guardar</button></label>
+        </div>
+        <div class="cards" id="cards"></div>
+        <div class="chart" id="chart" aria-label="Reportes por día"></div>
+        <p class="chart-cap" id="chart-cap"></p>
+
+        <div class="toolbar">
+          <div class="seg" id="seg-view" role="group" aria-label="Vista"><button type="button" data-v="tabla" class="on">Tabla</button><button type="button" data-v="tablero">Tablero</button></div>
+          <select id="f-dias" aria-label="Período">
+            <option value="1">Últimas 24 h</option><option value="7">Últimos 7 días</option><option value="30" selected>Últimos 30 días</option>
+            <option value="90">Últimos 90 días</option><option value="365">Último año</option>
+          </select>
+          <details class="pop" id="p-estado"><summary>Estado</summary><div class="menu" id="m-estado"></div></details>
+          <details class="pop" id="p-tipo"><summary>Tipo</summary><div class="menu" id="m-tipo"></div></details>
+          <details class="pop" id="p-sev"><summary>Gravedad</summary><div class="menu" id="m-sev"></div></details>
+          <select id="f-loc" aria-label="Localidad"><option value="">Todas las localidades</option></select>
+          <select id="g-by" aria-label="Agrupar"><option value="">Sin agrupar</option><option value="loc">Agrupar por localidad</option><option value="k">Agrupar por tipo</option><option value="estado">Agrupar por estado</option><option value="dia">Agrupar por día</option></select>
+          <input id="q" type="search" placeholder="Buscar nota, localidad o #id…" aria-label="Buscar">
+          <span class="grow"></span>
+          <button class="btn" id="csv" type="button">Exportar CSV</button>
+          <button class="btn" id="refresh" type="button" title="Actualizar">↻</button>
+        </div>
+        <div class="bulk" id="bulk" hidden>
+          <b id="bulk-n"></b>
+          <button class="btn sm btn-danger" id="bulk-hide" type="button">Ocultar</button>
+          <button class="btn sm" id="bulk-show" type="button">Volver a mostrar</button>
+          <button class="btn sm" id="bulk-clear" type="button">Limpiar selección</button>
+        </div>
+        <div id="box"></div>
+      </section>
+
+      <section id="v-accesos" hidden>
+        <header class="head"><h1>Accesos</h1><p class="sub">Cada enlace da acceso de solo lectura a este panel y al mapa de análisis. Crealo para quien lo necesite y revocalo cuando termine.</p></header>
+        <form id="acc-form" class="acc-form"><input id="acc-label" type="text" maxlength="80" placeholder="Para quién (p. ej. Defensa Civil Corrientes)" autocomplete="off" aria-label="Para quién"><button class="btn btn-primary" type="submit">Crear acceso</button></form>
+        <div id="acc-new"></div>
+        <div id="acc-list"></div>
+      </section>
+    </main>
+
+    <div class="scrim" id="scrim" hidden></div>
+    <aside class="peek" id="peek" hidden aria-label="Detalle del reporte"></aside>
+  </div>
+  <script src="admin.js" type="module"></script>
+</body>
+</html>

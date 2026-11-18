@@ -16,6 +16,7 @@ import { createAnalytics } from './analytics.mjs';
 import { createReports } from './reports.mjs';
 import { createAccess } from './access.mjs';
 import { createNotifier } from './notify.mjs';
+import { createLocalidades } from './localidades.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
@@ -600,7 +601,7 @@ const server = createServer(async (req, res) => {
   const p = url.pathname;
   try {
     // --- reportes de vecinos (mapa público)
-    if (p === '/api/config') return sendJSON(res, 200, reports.config(), { 'cache-control': 'public, max-age=300' });
+    if (p === '/api/config') return sendJSON(res, 200, reports.config(), { 'cache-control': 'public, max-age=30' }); // corto: la pausa de reportes se nota enseguida
     if (p === '/api/reportes' && req.method === 'GET') {
       if (rateLimited(req, 'rlist')) return sendText(res, 429, 'demasiados pedidos', { 'retry-after': '60' });
       if (Date.now() - publicReports.t > 10e3) publicReports = { t: Date.now(), body: JSON.stringify({ now: Date.now(), reportes: reports.publicList() }) };
@@ -641,6 +642,16 @@ const server = createServer(async (req, res) => {
       const dias = Math.min(Math.max(+url.searchParams.get('dias') || 30, 1), 3650);
       return sendJSON(res, 200, { now: Date.now(), role, reportes: reports.analysisList(dias, role === 'admin') });
     }
+    // acciones en lote del panel de administración: { ids: [..], accion: 'ocultar' | 'mostrar' }
+    if (p === '/api/admin/reportes/lote' && req.method === 'POST') {
+      if (!authorize(req, res, 'admin')) return;
+      const b = await readBody(req, 16384);
+      const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [];
+      if (!ids.length || (b.accion !== 'ocultar' && b.accion !== 'mostrar')) return sendJSON(res, 400, { error: 'pedido inválido' });
+      const n = reports.moderateMany(ids, b.accion === 'ocultar');
+      publicReports.t = 0;
+      return sendJSON(res, 200, { ok: true, cambiados: n });
+    }
     const mm = p.match(/^\/api\/admin\/reportes\/(\d+)$/);
     if (mm && req.method === 'POST') {
       if (!authorize(req, res, 'admin')) return;
@@ -649,6 +660,12 @@ const server = createServer(async (req, res) => {
       const ok = reports.moderate(+mm[1], b.accion === 'ocultar');
       publicReports.t = 0;
       return sendJSON(res, ok ? 200 : 404, { ok });
+    }
+    // guardas contra el flood: interruptor de emergencia y tope de reportes por hora (solo administrador)
+    if (p === '/api/admin/ajustes') {
+      if (!authorize(req, res, 'admin')) return;
+      if (req.method === 'POST') { const b = await readBody(req); reports.setSettings({ abierto: b.abierto, tope: b.tope }); }
+      return sendJSON(res, 200, reports.adminSettings());
     }
     if (p === '/api/admin/accesos') {
       if (!authorize(req, res, 'admin')) return;
@@ -715,12 +732,12 @@ const server = createServer(async (req, res) => {
       } catch (e) { return sendText(res, 404, e.message); }
     }
     // URLs sin extensión: /mapa y /analisis. Los enlaces viejos a /mapa.html (y las barras finales) redirigen con 301, conservando ?via= y el #hash
-    if (['/mapa.html', '/mapa/', '/analisis.html', '/analisis/'].includes(p) && (req.method === 'GET' || req.method === 'HEAD')) {
+    if (['/mapa.html', '/mapa/', '/analisis.html', '/analisis/', '/admin.html', '/admin/'].includes(p) && (req.method === 'GET' || req.method === 'HEAD')) {
       res.writeHead(301, { location: p.replace(/(\.html|\/)$/, '') + url.search, 'cache-control': 'public, max-age=3600' });
       return res.end();
     }
     if ((p === '/' || p === '/index.html' || p === '/mapa') && req.method === 'GET') analytics.pageView(req, p === '/mapa' ? 'mapa' : 'monitor', url.searchParams.get('via'));
-    const PAGE_FILES = { '/': 'index.html', '/mapa': 'mapa.html', '/analisis': 'analisis.html' };
+    const PAGE_FILES = { '/': 'index.html', '/mapa': 'mapa.html', '/analisis': 'analisis.html', '/admin': 'admin.html' };
     const rel = PAGE_FILES[p] ?? decodeURIComponent(p).replace(/^\/+/, '');
     const file = path.join(PUBLIC, rel);
     if (!file.startsWith(PUBLIC + path.sep)) return sendText(res, 403, 'prohibido');
@@ -739,8 +756,9 @@ const stationNames = Object.fromEntries(allStations.map((s) => [s.id, s.kind ===
 const analytics = await createAnalytics({ store, ownHost: process.env.SITE_HOST || null,
   stationIds: new Set(allStations.map((s) => s.id)), log });
 const access = createAccess({ store, isAdminKey: analytics.authorized });
-const notifier = createNotifier({ store, analytics, root: ROOT, log }); // avisos por Telegram (opcional)
-const reports = createReports({ store, log, onCreate: notifier.newReport, turnstile: { site: process.env.TURNSTILE_SITE_KEY || null, secret: process.env.TURNSTILE_SECRET_KEY || null } });
+const localidades = createLocalidades(ROOT);
+const notifier = createNotifier({ store, analytics, localidades, log }); // avisos por Telegram (opcional)
+const reports = createReports({ store, log, localidades, onCreate: notifier.newReport, onAlert: notifier.alert, turnstile: { site: process.env.TURNSTILE_SITE_KEY || null, secret: process.env.TURNSTILE_SECRET_KEY || null } });
 // al apagar (deploy, reinicio) se guardan los totales pendientes
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => analytics.flush().catch(() => {}).finally(() => { try { store.close(); } catch {} process.exit(0); }));
 server.listen(PORT, HOST, () => log(`Caudal en http://${HOST}:${PORT} · datos en ${DATA}`));

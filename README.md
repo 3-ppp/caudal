@@ -71,7 +71,7 @@ Fuentes complementarias (módulos opcionales en `sources/`; si uno falla, el res
 `/mapa` (enlace "mapa" en la barra superior): la imagen satelital y, encima, lo que marca la gente. Como contexto muestra las **localidades** y los **ríos con sus medidores** (boyas del INA y escalas de Prefectura: al tocar uno se ve la altura de hoy y sus niveles de alerta y evacuación), con dos casillas para apagarlos (`public/contexto.js`). Las demás capas (barrios populares, rutas, represas) están solo en la herramienta de análisis (más abajo).
 
 - **Reportar** (`+ reportar agua`): se escribe la localidad (el buscador sugiere entre los gobiernos locales de las provincias del mapa y las ciudades vecinas, y lleva el mapa hasta ahí) o, si no aparece, se mueve el mapa a mano. En los dos casos la cruz queda sobre el lugar exacto. **En el celular el reporte tiene dos pasos**: primero se elige el punto, con un panel mínimo para que quede casi todo el mapa libre (y los botones de zoom a la vista), y con "siguiente" se fija el punto y aparecen el tipo, la cantidad de agua y la nota; "cambiar punto" vuelve al paso 1. En la compu todo está junto en un panel a la derecha. Después se elige qué pasa (calle anegada, agua en viviendas, ruta o camino cortado, río desbordado), cuánta agua hay (poca, media, mucha) y, si se quiere, una nota de hasta 140 caracteres sin enlaces. No hace falta cuenta. Hay que acercarse hasta ver la calle para enviar. Los tipos tienen color y forma distintos (círculo, cuadrado, triángulo, rombo).
-- **Confirmar**: tocando un reporte se ve el detalle y los reportes parecidos cerca (300 m, 24 h), y cualquiera puede decir "sigue así" (lo renueva por otras 72 horas, hasta 7 días en total) o "ya bajó" (con dos votos de "ya bajó", más que los de "sigue", el reporte deja de mostrarse).
+- **Confirmar**: tocando un reporte se ve el detalle y los reportes parecidos cerca (300 m, 24 h), y cualquiera puede decir "sigue así" (lo renueva por otras 72 horas, hasta 7 días en total) o "ya bajó" (con tres votos de "ya bajó", más que los de "sigue", el reporte deja de mostrarse; "ya bajó" solo se puede votar cuando el reporte tiene al menos 2 horas, para que no se pueda esconder uno recién hecho).
 - **Vencimiento**: un reporte dura **72 horas**. En las **últimas 24 horas** pasa a una transición: el marcador se pone gris, con trazo punteado, y se va apagando hasta desaparecer; la ficha dice "por vencer · se retira en N h". Un "sigue así" lo renueva (vuelve a su color y le da otras 72 horas). La base conserva todos (también los vencidos y los ocultos) para la herramienta de análisis.
 - La vista y el reporte elegido van en la URL (`#zoom/lat/lon[/rID]`), así que se puede compartir.
 
@@ -83,7 +83,9 @@ Fuentes complementarias (módulos opcionales en `sources/`; si uno falla, el res
 - Límites: 20 reportes por hora por IP y 8 por día por dispositivo; el mismo dispositivo que repite el mismo reporte en el mismo lugar no suma uno nuevo, solo lo renueva.
 - Las notas no pueden llevar enlaces ni caracteres mal codificados (`�`); se limpian los caracteres de control y se muestran siempre como texto (nunca como HTML).
 - Solo se aceptan puntos dentro de la zona del mapa.
-- **Moderación**: el administrador oculta un reporte desde la herramienta de análisis (no se borra: queda para auditar) o con `scripts/admin.mjs ocultar <id>`.
+- **Tope global por hora**: 300 reportes nuevos por hora en total (se cambia desde el panel, de 10 a 100.000). Al llegar, los nuevos se rechazan con un mensaje claro hasta que baje y se **avisa por Telegram** (una vez cada 30 minutos). Cuenta los reportes guardados, así que no se reinicia con el servicio.
+- **Interruptor de emergencia**: en el panel de administración, "Pausar reportes" deja el mapa en solo lectura: no entran reportes ni confirmaciones, el botón de reportar desaparece y se avisa en pantalla, pero se sigue viendo lo que hay. Se reabre con un clic, y cada cambio avisa por Telegram. Si te están floodeando, es lo primero que conviene apretar.
+- **Moderación**: el administrador oculta uno o varios reportes desde el panel de administración (no se borran: quedan para auditar) o con `scripts/admin.mjs ocultar <id>`.
 
 Los reportes son avisos de vecinos **sin verificar** y no reemplazan a los avisos oficiales; el mapa lo dice en pantalla y recuerda el 911.
 
@@ -96,13 +98,28 @@ Los reportes son avisos de vecinos **sin verificar** y no reemplazan a los aviso
 - **Configuración**: se crea un bot con [@BotFather](https://t.me/BotFather) (`/newbot`), se le escribe un mensaje al bot (o se lo suma a un grupo) y se abre `https://api.telegram.org/bot<TOKEN>/getUpdates` para leer `chat.id`. Las dos variables van en el mismo `/etc/caudal.env` del captcha: `TELEGRAM_BOT_TOKEN=…` y `TELEGRAM_CHAT_ID=…`. Opcionales: `SITE_URL` (para los enlaces) y `TELEGRAM_API`. Sin las dos primeras no se envía nada.
 - **Privacidad**: los avisos llevan el punto del reporte (ya redondeado a ~100 m) y la nota a Telegram, un tercero. Van solo a tu chat; si el chat es un grupo, lo ve todo el grupo.
 
+## Panel de administración (`/admin`)
+
+Es la pantalla principal para **administración y autoridades**: los reportes como una **base de datos** al estilo de Notion (`public/admin.html`, `admin.js`, `admin.css`), con claro y oscuro y adaptada al celular.
+
+- **Tabla** de reportes con estado (vigente, por vencer, vencido, resuelto u oculto), tipo, gravedad, **localidad más cercana**, nota, fecha, vencimiento y votos. Se ordena por cualquier columna y se **filtra** por período, estado, tipo, gravedad y localidad, o se busca por texto o por `#id`. Se puede **agrupar** por localidad, tipo, estado o día.
+- **Tablero** por estado, y arriba tarjetas con totales (que filtran al tocarlas) y un gráfico de reportes por día.
+- **Detalle** al tocar un reporte: un panel lateral con un mapa satelital del punto, la gravedad, la ubicación, las confirmaciones y la nota, con acciones (ocultar o volver a mostrar, abrir en el mapa de análisis, copiar el enlace público).
+- **Acciones en lote** (solo administrador): se marcan varios reportes y se ocultan o se vuelven a mostrar de una vez (hasta 500 por pedido). Un reporte oculto no se borra.
+- **Exportar CSV** de lo que se ve con los filtros actuales (para planillas o informes).
+- **Guardas contra el flood** (solo administrador): el interruptor para pausar los reportes y el tope por hora, con cuántos entraron en la última hora.
+- **Accesos** (solo administrador): se crean y se revocan los enlaces de solo lectura para autoridades (`…/admin#k=CÓDIGO`).
+- La **localidad más cercana** (hasta 30 km) la calcula el servidor con la lista de gobiernos locales (`localidades.mjs`).
+
+El acceso es el mismo que el de la herramienta de análisis (más abajo): una vez adentro de una de las dos páginas, la otra también queda abierta en ese navegador. Las autoridades ven todo salvo los reportes ocultos y no tienen casillas ni acciones.
+
 ## Herramienta de análisis (capas)
 
-`/analisis`: un mapa casi a pantalla completa, con zoom hasta cada barrio, para **administración y autoridades**. Reúne todas las capas y los reportes de vecinos. Cruza el caudal con el [Registro Nacional de Barrios Populares](https://datos.gob.ar/dataset/registro-nacional-de-barrios-populares) (RENABAP, Secretaría de Integración Socio Urbana, CC BY 4.0). La vista y el barrio elegido van en la URL (`#zoom/lat/lon/bID`).
+El mapa es una herramienta **secundaria** del panel (enlace "Mapa de análisis" en la barra lateral). `/analisis`: un mapa casi a pantalla completa, con zoom hasta cada barrio, para **administración y autoridades**. Reúne todas las capas y los reportes de vecinos. Cruza el caudal con el [Registro Nacional de Barrios Populares](https://datos.gob.ar/dataset/registro-nacional-de-barrios-populares) (RENABAP, Secretaría de Integración Socio Urbana, CC BY 4.0). La vista y el barrio elegido van en la URL (`#zoom/lat/lon/bID`).
 
 **Acceso.** Es la única página que muestra las capas, y sus datos (`layers/*.json`) **no se sirven públicamente**, salvo los ríos y las escalas que usa también el mapa público (`cauces` y `puertos`) y las localidades (`/api/localidades.json`, sin teléfonos ni sitios web). El resto sale de `/api/capas/…`, que exige un acceso en el encabezado `Authorization: Bearer …`. Hay dos tipos:
 - **Administrador**: la clave de `/stats` (se genera sola la primera vez; ver Estadísticas). Puede moderar reportes y crear accesos.
-- **Autoridad**: acceso de **solo lectura** que el administrador crea desde el panel "accesos de autoridades" (un enlace `…/analisis#k=CÓDIGO` que se le pasa a quien lo necesite) y puede revocar cuando quiera. De cada acceso se guarda solo el hash; el código se muestra una única vez. Las autoridades no ven los reportes ocultos.
+- **Autoridad**: acceso de **solo lectura** que el administrador crea desde la sección "Accesos" del panel (un enlace `…/admin#k=CÓDIGO`; el mismo código sirve para `/analisis` que se le pasa a quien lo necesite) y puede revocar cuando quiera. De cada acceso se guarda solo el hash; el código se muestra una única vez. Las autoridades no ven los reportes ocultos.
 
 El enlace con `#k=` guarda el código en ese navegador y lo borra de la barra de direcciones (lo que va después de `#` no viaja al servidor). Tras 20 intentos fallidos desde una IP se bloquea por 10 minutos.
 
@@ -146,6 +163,8 @@ Uso no comercial gratuito en Open-Meteo. Para uso comercial o alto tráfico, rev
 | `data/stations.calibrated.json` | puntos ajustados a la celda del cauce en GloFAS |
 | `db.mjs` | la base de datos SQLite (esquema, funciones de acceso y migración desde los JSON anteriores) |
 | `notify.mjs` | avisos por Telegram: reportes nuevos y resumen diario |
+| `public/admin.html`, `admin.js`, `admin.css` | panel de administración (reportes como base de datos) |
+| `localidades.mjs` | localidad más cercana a un punto |
 | `reports.mjs`, `access.mjs` | reportes de vecinos (validación, captcha, límites, confirmaciones) y accesos a la herramienta de análisis |
 | `scripts/admin.mjs` | administración desde el servidor: clave, accesos y moderación |
 | `public/` | interfaz (HTML + JS + CSS, sin build) |

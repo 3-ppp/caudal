@@ -4,8 +4,6 @@
 //   SITE_URL       dirección pública del sitio para los enlaces; por defecto https://caudal.puaj.club
 // Para no inundar el chat en una crecida: el primer reporte avisa enseguida y los que llegan durante el minuto siguiente
 // se juntan en un solo mensaje. Los avisos nunca frenan ni rompen el pedido que los origina.
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { KINDS } from './reports.mjs';
 
 const SEV = { 1: 'poca agua', 2: 'agua media', 3: 'mucha agua' };
@@ -13,21 +11,13 @@ const COOLDOWN_MS = 60e3;
 const dayAR = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 const hourAR = () => +new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', hour12: false }).format(new Date());
 
-export function createNotifier({ store, analytics, root, log }) {
+export function createNotifier({ store, analytics, localidades, log }) {
   const token = process.env.TELEGRAM_BOT_TOKEN, chat = process.env.TELEGRAM_CHAT_ID;
-  if (!token || !chat) { log('telegram: sin TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID: no se envían avisos'); return { enabled: false, newReport() {}, start() {} }; }
+  if (!token || !chat) { log('telegram: sin TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID: no se envían avisos'); return { enabled: false, newReport() {}, alert() {}, start() {} }; }
   const api = (process.env.TELEGRAM_API || 'https://api.telegram.org').replace(/\/$/, '');
   const site = (process.env.SITE_URL || 'https://caudal.puaj.club').replace(/\/$/, '');
 
-  // localidad más cercana al punto (para decir "cerca de Corrientes"); sale de la lista de gobiernos locales
-  let LOC = [];
-  try { LOC = JSON.parse(readFileSync(path.join(root, 'layers', 'municipios.json'), 'utf8')).municipios.filter((m) => m.c).map((m) => ({ n: m.n, p: m.p, lon: m.c[0], lat: m.c[1] })); } catch {}
-  function nearest(lat, lon) {
-    const cos = Math.cos(lat * Math.PI / 180);
-    let best = null, bd = 30; // hasta 30 km
-    for (const m of LOC) { const d = Math.hypot((m.lon - lon) * cos * 111.32, (m.lat - lat) * 110.54); if (d < bd) { bd = d; best = m; } }
-    return best ? `${best.n} (${best.p})` : null;
-  }
+  const nearest = (lat, lon) => localidades.nearest(lat, lon)?.text ?? null; // "Goya (Corrientes)"
 
   async function send(text) {
     try {
@@ -69,5 +59,13 @@ export function createNotifier({ store, analytics, root, log }) {
     await send(`Resumen de hoy (${day})\nVisitas: ${a.views} (${a.uniques} únicos) · mapa ${a.pages.mapa || 0} · monitor ${a.pages.monitor || 0}\nCompartidos: ${a.shares}\nReportes nuevos: ${rep} (vigentes ahora: ${act}) · confirmaciones: ${votes}`);
   }
   function start() { setInterval(() => digest().catch(() => {}), 60e3).unref(); log('telegram: avisos activados'); }
-  return { enabled: true, newReport, start, send, digest };
+  // avisos de las guardas (tope alcanzado, pausa de reportes): cada clave avisa como mucho una vez por gapMs (0: siempre)
+  const lastAlert = new Map();
+  function alert(key, text, gapMs = 30 * 60e3) {
+    const now = Date.now();
+    if (gapMs && now - (lastAlert.get(key) || 0) < gapMs) return;
+    lastAlert.set(key, now);
+    send(`Aviso: ${text}`);
+  }
+  return { enabled: true, newReport, alert, start, send, digest };
 }

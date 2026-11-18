@@ -194,3 +194,9 @@ tr.grp td .c { color: var(--ink-3); font-weight: 400; margin-left: 6px; }
 .ctl-info { color: var(--ink-2); }
 .ctl-tope { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
 .ctl-tope input { width: 84px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+
+/* ingreso y cambio de contraseña */
+.fld { display: block; margin: 10px 0 0; color: var(--ink-2); font-size: 13px; }
+.fld input { display: block; width: 100%; margin-top: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.btn-row { display: flex; gap: 8px; margin-top: 8px; } .btn-row .btn-primary { flex: 1; width: auto; margin-top: 0; }
+.side-foot { flex-wrap: wrap; } .btn.sm { white-space: nowrap; }

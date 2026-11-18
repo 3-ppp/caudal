@@ -1,6 +1,6 @@
 // Panel de administración: los reportes como una base de datos (tabla o tablero), con filtros, orden, agrupación, acciones en lote,
-// panel lateral de detalle y exportación a CSV. Es de uso interno: pide el mismo acceso que la herramienta de análisis
-// (la clave de administrador o un acceso de autoridad, que es de solo lectura).
+// panel lateral de detalle y exportación a CSV. Es de uso interno: pide usuario y contraseña
+// (administración, o autoridad, que es de solo lectura).
 import { KIND, SEV, ago, vigencia } from './reportes.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -12,46 +12,68 @@ const TZ = 'America/Argentina/Buenos_Aires';
 const fmt = (ms) => new Date(ms).toLocaleString('es-AR', { timeZone: TZ, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).replace('.', '');
 const dayOf = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date(ms));
 
-// ---------- acceso (el mismo que la herramienta de análisis: se guarda en este navegador y viaja en Authorization)
-const KEY_STORE = 'caudal-analisis';
-let KEY = '';
-try { KEY = localStorage.getItem(KEY_STORE) || ''; } catch {}
-{
-  const m = location.hash.match(/^#k=([\w-]+)$/);
-  if (m) { KEY = m[1]; try { localStorage.setItem(KEY_STORE, KEY); } catch {} history.replaceState(null, '', location.pathname); }
-}
+// ---------- acceso: usuario y contraseña. La sesión es una cookie HttpOnly que maneja el servidor (el navegador no guarda ninguna clave).
 async function api(url, body) {
-  const opts = body ? { method: 'POST', headers: { authorization: 'Bearer ' + KEY, 'content-type': 'application/json' }, body: JSON.stringify(body) } : { headers: { authorization: 'Bearer ' + KEY } };
-  const r = await fetch(url, opts);
-  if (!r.ok) throw Object.assign(new Error(url), { status: r.status });
+  const r = await fetch(url, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
+  if (!r.ok) throw Object.assign(new Error(url), { status: r.status, data: await r.json().catch(() => ({})) });
   return r.json();
 }
+function loginUI() {
+  $('#login').hidden = false;
+  $('#login-user').focus();
+  return new Promise((resolve) => {
+    $('#login-form').onsubmit = async (ev) => {
+      ev.preventDefault();
+      $('#login-msg').textContent = '';
+      try { const u = await api('/api/sesion', { usuario: $('#login-user').value, clave: $('#login-key').value }); $('#login-key').value = ''; $('#login').hidden = true; resolve(u); }
+      catch (e) { $('#login-msg').textContent = e.data?.error || 'No se pudo ingresar. Probá de nuevo.'; $('#login-key').value = ''; $('#login-key').focus(); }
+    };
+  });
+}
+// cambio de contraseña: obligatorio con una contraseña temporal; voluntario desde el menú
+function pwUI(forced) {
+  const box = $('#pw');
+  box.hidden = false;
+  $('#pw-title').textContent = forced ? 'Elegí tu contraseña' : 'Cambiar contraseña';
+  $('#pw-hint').textContent = forced ? 'La contraseña que te dieron es temporal. Elegí una nueva para continuar: al menos 12 caracteres.' : 'Elegí una contraseña de al menos 12 caracteres. Se cierran tus otras sesiones.';
+  $('#pw-cancel').hidden = forced;
+  for (const id of ['#pw-old', '#pw-new', '#pw-new2']) $(id).value = '';
+  $('#pw-msg').textContent = '';
+  $('#pw-old').focus();
+  return new Promise((resolve) => {
+    $('#pw-cancel').onclick = () => { box.hidden = true; resolve(false); };
+    $('#pw-form').onsubmit = async (ev) => {
+      ev.preventDefault();
+      if ($('#pw-new').value !== $('#pw-new2').value) { $('#pw-msg').textContent = 'Las contraseñas nuevas no coinciden.'; return; }
+      try { await api('/api/sesion/clave', { actual: $('#pw-old').value, nueva: $('#pw-new').value }); box.hidden = true; resolve(true); }
+      catch (e) { $('#pw-msg').textContent = e.data?.error || 'No se pudo cambiar la contraseña.'; }
+    };
+  });
+}
 async function gate() {
-  let wrong = '';
   for (;;) {
-    if (KEY) {
-      try { return await api('/api/analisis/yo'); }
-      catch (e) { if (e.status !== 401 && e.status !== 429) throw e; wrong = e.status === 429 ? 'Demasiados intentos. Esperá unos minutos.' : 'Ese código no es válido.'; KEY = ''; try { localStorage.removeItem(KEY_STORE); } catch {} }
-    }
-    $('#login').hidden = false;
-    $('#login-msg').textContent = wrong;
-    KEY = await new Promise((resolve) => { $('#login-form').onsubmit = (ev) => { ev.preventDefault(); resolve($('#login-key').value.trim()); }; });
-    try { localStorage.setItem(KEY_STORE, KEY); } catch {}
+    let u = null;
+    try { u = await api('/api/sesion'); } catch { u = null; }
+    if (!u) u = await loginUI();
+    if (u.cambiar) { await pwUI(true); continue; }
+    return u;
   }
 }
+const ME = await gate();
+// la herramienta de análisis manda acá a ingresar y, con la sesión abierta, se vuelve a ella
+if (new URLSearchParams(location.search).get('volver') === 'analisis') { location.replace('/analisis'); await new Promise(() => {}); }
+$('#login').hidden = true; $('#app').hidden = false;
+const ADMIN = ME.rol === 'admin';
+$('#role').textContent = `${ME.usuario} · ${ADMIN ? 'administración' : 'autoridad · solo lectura'}`;
+$('#logout').addEventListener('click', async () => { try { await api('/api/sesion/salir', {}); } catch {} location.reload(); });
+$('#pw-open').addEventListener('click', async () => { if (await pwUI(false)) toast('Contraseña cambiada'); });
+if (ADMIN) { $('#nav-users').hidden = false; $('#nav-stats').hidden = false; }
 
 // ---------- tema
 const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; };
 const themeLabel = () => { $('#theme').textContent = isDark() ? 'tema claro' : 'tema oscuro'; };
 $('#theme').addEventListener('click', () => { document.documentElement.dataset.theme = isDark() ? 'light' : 'dark'; try { localStorage.setItem('tema', document.documentElement.dataset.theme); } catch {} themeLabel(); });
 themeLabel();
-
-const ME = await gate();
-$('#login').hidden = true; $('#app').hidden = false;
-const ADMIN = ME.role === 'admin';
-$('#role').textContent = ADMIN ? 'Administración' : 'Autoridad · solo lectura';
-$('#logout').addEventListener('click', () => { try { localStorage.removeItem(KEY_STORE); } catch {} location.reload(); });
-if (ADMIN) { $('#nav-acc').hidden = false; const st = $('#nav-stats'); st.hidden = false; st.href = '/stats?key=' + encodeURIComponent(KEY); }
 
 // ---------- estado de la vista (se recuerda lo elegido en este navegador)
 const PREF = 'caudal-admin';
@@ -85,7 +107,7 @@ async function load(silent = false) {
     render();
     if (S.cur != null) { if (ids.has(S.cur)) drawPeek(); else closePeek(); }
   } catch (e) {
-    if (e.status === 401) { try { localStorage.removeItem(KEY_STORE); } catch {} location.reload(); return; }
+    if (e.status === 401 || e.status === 403) { location.reload(); return; } // la sesión se cerró o venció: se vuelve a pedir el ingreso
     if (!silent) $('#sub').textContent = 'No se pudieron cargar los reportes. Probá de nuevo.';
   }
 }
@@ -296,34 +318,51 @@ $('#bulk-clear').addEventListener('click', () => { S.sel.clear(); render(); });
 document.addEventListener('click', (ev) => { for (const d of $$('details.pop[open]')) if (!d.contains(ev.target)) d.open = false; });
 $$('.nav[data-view]').forEach((b) => b.addEventListener('click', () => {
   $$('.nav[data-view]').forEach((x) => x.classList.toggle('on', x === b));
-  $('#v-reportes').hidden = b.dataset.view !== 'reportes'; $('#v-accesos').hidden = b.dataset.view !== 'accesos';
-  if (b.dataset.view === 'accesos') drawAccesos();
+  $('#v-reportes').hidden = b.dataset.view !== 'reportes'; $('#v-usuarios').hidden = b.dataset.view !== 'usuarios';
+  if (b.dataset.view === 'usuarios') drawUsers();
 }));
 
-// ---------- accesos (solo administración)
-async function drawAccesos() {
-  try {
-    const { accesos } = await api('/api/admin/accesos');
-    const f = (ms) => (ms ? new Date(ms).toLocaleDateString('es-AR', { timeZone: TZ, day: 'numeric', month: 'short', year: 'numeric' }).replace('.', '') : '—');
-    $('#acc-list').innerHTML = accesos.length ? `<div class="tbl-wrap"><table style="min-width:0"><thead><tr><th>Para quién</th><th>Creado</th><th>Último uso</th><th>Estado</th><th></th></tr></thead><tbody>` +
-      accesos.map((a) => `<tr><td>${esc(a.label)}</td><td class="dim">${f(a.created)}</td><td class="dim">${f(a.last_used)}</td><td>${a.revoked ? '<span class="tag hid">revocado</span>' : '<span class="tag live">activo</span>'}</td><td>${a.revoked ? '' : `<button class="btn sm btn-danger" data-rev="${a.id}" type="button">Revocar</button>`}</td></tr>`).join('') + '</tbody></table></div>' : '<p class="empty">Todavía no hay accesos de autoridad.</p>';
-  } catch { $('#acc-list').innerHTML = '<p class="empty">No se pudieron cargar los accesos.</p>'; }
+// ---------- usuarios (solo administración)
+function showTemp(title, usuario, clave) {
+  $('#user-new').innerHTML = `<div class="acc-new"><p>${esc(title)} <b>${esc(usuario)}</b>. Contraseña temporal (se muestra una sola vez; tiene que cambiarla al entrar):</p><input readonly value="${esc(clave)}" aria-label="Contraseña temporal"></div>`;
+  $('#user-new input').select();
 }
-$('#acc-form').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const label = $('#acc-label').value.trim();
-  if (!label) return;
+async function drawUsers() {
   try {
-    const { token } = await api('/api/admin/accesos', { label });
-    $('#acc-label').value = '';
-    $('#acc-new').innerHTML = `<div class="acc-new"><p>Enlace para <b>${esc(label)}</b>. Se muestra una sola vez; quien lo abre queda con acceso de lectura.</p><input readonly value="${location.origin}/admin#k=${token}" aria-label="Enlace de acceso"></div>`;
-    $('#acc-new input').select();
-    drawAccesos();
-  } catch { toast('No se pudo crear el acceso'); }
+    const { usuarios, yo } = await api('/api/admin/usuarios');
+    const f = (ms) => (ms ? new Date(ms).toLocaleString('es-AR', { timeZone: TZ, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).replace('.', '') : 'nunca');
+    $('#user-list').innerHTML = `<div class="tbl-wrap"><table style="min-width:0"><thead><tr><th>Usuario</th><th>Rol</th><th>Último ingreso</th><th>Estado</th><th></th></tr></thead><tbody>` +
+      usuarios.map((u) => `<tr><td>${esc(u.usuario)}${u.id === yo ? ' <span class="dim">(vos)</span>' : ''}</td><td>${u.rol === 'admin' ? 'Administración' : 'Autoridad'}</td><td class="dim">${f(u.ultimoIngreso)}</td>` +
+        `<td>${u.desactivado ? '<span class="tag hid">desactivado</span>' : u.claveTemporal ? '<span class="tag fade">clave temporal</span>' : '<span class="tag live">activo</span>'}</td>` +
+        `<td style="white-space:nowrap"><button class="btn sm" data-u="resetear" data-id="${u.id}" data-name="${esc(u.usuario)}" type="button">Resetear clave</button> ` +
+        (u.id === yo ? '' : `<button class="btn sm ${u.desactivado ? '' : 'btn-danger'}" data-u="${u.desactivado ? 'activar' : 'desactivar'}" data-id="${u.id}" data-name="${esc(u.usuario)}" type="button">${u.desactivado ? 'Activar' : 'Desactivar'}</button>`) + '</td></tr>').join('') + '</tbody></table></div>';
+  } catch { $('#user-list').innerHTML = '<p class="empty">No se pudieron cargar los usuarios.</p>'; }
+}
+$('#user-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  try {
+    const r = await api('/api/admin/usuarios', { usuario: $('#user-name').value, rol: $('#user-role').value });
+    $('#user-name').value = '';
+    showTemp('Usuario creado:', r.usuario, r.clave);
+    drawUsers();
+  } catch (e) { toast(e.data?.error || 'No se pudo crear el usuario'); }
 });
-$('#acc-list').addEventListener('click', async (ev) => {
-  const id = ev.target.dataset.rev;
-  if (id && confirm('¿Revocar este acceso? Deja de funcionar enseguida.')) { try { await api(`/api/admin/accesos/${id}/revocar`, {}); drawAccesos(); } catch { toast('No se pudo revocar'); } }
+$('#user-list').addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-u]');
+  if (!b) return;
+  const { u, id, name } = b.dataset;
+  try {
+    if (u === 'resetear') {
+      if (!confirm(`¿Resetear la contraseña de ${name}? Se cierran sus sesiones y le toca elegir una nueva.`)) return;
+      const r = await api(`/api/admin/usuarios/${id}/resetear`, {});
+      showTemp('Contraseña reseteada de', r.usuario, r.clave);
+    } else {
+      if (u === 'desactivar' && !confirm(`¿Desactivar a ${name}? Deja de poder entrar enseguida.`)) return;
+      await api(`/api/admin/usuarios/${id}/${u}`, {});
+      toast(u === 'desactivar' ? 'Usuario desactivado' : 'Usuario activado');
+    }
+    drawUsers();
+  } catch (e) { toast(e.data?.error || 'No se pudo completar la acción'); }
 });
 
 // ---------- guardas contra el flood (solo administración): interruptor de emergencia y tope de reportes por hora

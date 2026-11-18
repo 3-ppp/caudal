@@ -34,7 +34,7 @@ Los mosaicos y las imágenes satelitales siguen siendo archivos en `data/tiles/`
 
 **Migración.** La primera vez que arranca una versión con base de datos, el servidor importa los JSON de las versiones anteriores (`latest.json`, `extras.json`, `climatology.json`, `heights-history.json`, `dam-*.json`, `analytics*.json`, `stats-key` y la carpeta `archive/`). Cada archivo se importa una sola vez, queda anotado en `docs` (`migrated:…`) y **no se modifica ni se borra**: sirven de respaldo y permiten volver a la versión anterior. Pasada una semana sin problemas se pueden borrar. El respaldo de la base es copiar `caudal.db` (con el servicio detenido, o con `sqlite3 caudal.db ".backup copia.db"`).
 
-`scripts/admin.mjs` administra la base desde el servidor: ver o cambiar la clave de administración, listar accesos, listar y ocultar reportes.
+`scripts/admin.mjs` administra la base desde el servidor: crear y resetear usuarios del panel (es el acceso de emergencia), y listar y ocultar reportes.
 
 ## Datos
 
@@ -108,51 +108,34 @@ Es la pantalla principal para **administración y autoridades**: los reportes co
 - **Acciones en lote** (solo administrador): se marcan varios reportes y se ocultan o se vuelven a mostrar de una vez (hasta 500 por pedido). Un reporte oculto no se borra.
 - **Exportar CSV** de lo que se ve con los filtros actuales (para planillas o informes).
 - **Guardas contra el flood** (solo administrador): el interruptor para pausar los reportes y el tope por hora, con cuántos entraron en la última hora.
-- **Accesos** (solo administrador): se crean y se revocan los enlaces de solo lectura para autoridades (`…/admin#k=CÓDIGO`).
+- **Usuarios** (solo administrador): se crean usuarios (administración o autoridad), se resetea su contraseña y se los desactiva. Ver "Acceso" más abajo.
 - La **localidad más cercana** (hasta 30 km) la calcula el servidor con la lista de gobiernos locales (`localidades.mjs`).
 
-El acceso es el mismo que el de la herramienta de análisis (más abajo): una vez adentro de una de las dos páginas, la otra también queda abierta en ese navegador. Las autoridades ven todo salvo los reportes ocultos y no tienen casillas ni acciones.
+Se entra con **usuario y contraseña** (ver "Acceso" más abajo); la sesión sirve también para la herramienta de análisis y las estadísticas. Las autoridades ven todo salvo los reportes ocultos y no tienen casillas ni acciones.
 
 ## Herramienta de análisis (capas)
 
 El mapa es una herramienta **secundaria** del panel (enlace "Mapa de análisis" en la barra lateral). `/analisis`: un mapa casi a pantalla completa, con zoom hasta cada barrio, para **administración y autoridades**. Reúne todas las capas y los reportes de vecinos. Cruza el caudal con el [Registro Nacional de Barrios Populares](https://datos.gob.ar/dataset/registro-nacional-de-barrios-populares) (RENABAP, Secretaría de Integración Socio Urbana, CC BY 4.0). La vista y el barrio elegido van en la URL (`#zoom/lat/lon/bID`).
 
 **Acceso.** Es la única página que muestra las capas, y sus datos (`layers/*.json`) **no se sirven públicamente**, salvo los ríos y las escalas que usa también el mapa público (`cauces` y `puertos`) y las localidades (`/api/localidades.json`, sin teléfonos ni sitios web). El resto sale de `/api/capas/…`, que exige un acceso en el encabezado `Authorization: Bearer …`. Hay dos tipos:
-- **Administrador**: la clave de `/stats` (se genera sola la primera vez; ver Estadísticas). Puede moderar reportes y crear accesos.
-- **Autoridad**: acceso de **solo lectura** que el administrador crea desde la sección "Accesos" del panel (un enlace `…/admin#k=CÓDIGO`; el mismo código sirve para `/analisis` que se le pasa a quien lo necesite) y puede revocar cuando quiera. De cada acceso se guarda solo el hash; el código se muestra una única vez. Las autoridades no ven los reportes ocultos.
+- **Administración**: puede moderar reportes, usar las guardas contra el flood, ver las estadísticas y administrar usuarios.
+- **Autoridad**: **solo lectura**. No ve los reportes ocultos ni las estadísticas, y no tiene acciones ni gestión de usuarios (el servidor lo verifica, no solo la pantalla).
 
-El enlace con `#k=` guarda el código en ese navegador y lo borra de la barra de direcciones (lo que va después de `#` no viaja al servidor). Tras 20 intentos fallidos desde una IP se bloquea por 10 minutos.
+**Ingreso con usuario y contraseña** (`/admin`; `/analisis` y `/stats` usan la misma sesión):
+- Las contraseñas se guardan con **scrypt** y sal propia (módulo `crypto` de Node), nunca en texto. Mínimo 12 caracteres.
+- La sesión es una **cookie `HttpOnly`, `SameSite=Strict` y `Secure`** (cuando el sitio va por HTTPS) con un código de 256 bits al azar; en la base solo se guarda su hash. Dura 12 horas sin uso y como mucho 7 días, y "salir" la cierra en el servidor. Ningún código ni clave queda en la URL, en el historial ni en el almacenamiento del navegador.
+- Los pedidos que cambian datos tienen que venir del propio sitio (se revisa `Origin` o `Sec-Fetch-Site`), además de `SameSite=Strict`.
+- **Intentos**: 5 fallos con el mismo usuario desde la misma IP bloquean ese par por 15 minutos, 20 fallos desde una IP la cortan por 10 minutos, y la respuesta es la misma para un usuario que no existe (también en el tiempo: se hace el mismo cálculo).
+- **Alta de usuarios**: el primero se crea desde el servidor; los demás, desde la sección Usuarios del panel. La contraseña inicial es **temporal**: se muestra una sola vez y la persona tiene que cambiarla al entrar (cambiarla cierra sus otras sesiones). Resetear la clave de alguien cierra sus sesiones. Siempre queda al menos una administración activa.
+- **Acceso de emergencia**: desde el servidor, con sudo (la base es solo del usuario del servicio):
 
-**Reportes** (casilla "reportes de vecinos"): período a elegir (24 h a un año), filtro por tipo, conteo por tipo y de vigentes; al tocar uno, el detalle con confirmaciones, estado (vigente, vencido u oculto) y reportes cerca. El administrador puede ocultarlo o volver a mostrarlo, y ver los ocultos.
+```
+sudo -u caudal DATA_DIR=/opt/caudal/data /opt/node/bin/node /opt/caudal/app/scripts/admin.mjs usuarios
+sudo -u caudal DATA_DIR=/opt/caudal/data /opt/node/bin/node /opt/caudal/app/scripts/admin.mjs crear-usuario NOMBRE admin
+sudo -u caudal DATA_DIR=/opt/caudal/data /opt/node/bin/node /opt/caudal/app/scripts/admin.mjs resetear-clave NOMBRE
+```
 
-**Capas** (panel de la izquierda). La inundación observada por el radar (Copernicus GFM) no está en este mapa: se ve en el monitor, en "desde el satélite" de cada punto.
-
-- **Satélite**: mosaico Sentinel-2 cloudless, de la misma grilla de mosaicos que usa el monitor, hasta ~10 m por píxel.
-- **Barrios populares**: un punto por barrio (más grande cuantas más familias), que de cerca pasa a ser su contorno. El color es la **altura sobre el agua más cercana** (violeta oscuro = bajo, claro = alto): una medida de exposición que no cambia con la fecha. Con la barra de abajo se elige una fecha y solo se marcan de rojo los barrios que el río alcanza en ella (inundación probable) y de naranja los que están a menos de 1 m (posible). Ficha corta con familias, altura sobre el agua y el estado en la fecha elegida. Búsqueda por barrio o localidad.
-- **Estado de rutas nacionales**: los tramos de rutas nacionales que Vialidad Nacional informa con corte total, corte parcial o restricción, dibujados sobre la traza de la ruta, sin listado: al pasar el cursor por uno se ve el tramo, el estado, la calzada, el largo, la hora de actualización y la observación oficial. **Es lo que informa Vialidad, no una estimación nuestra** (probamos estimarlo con el terreno y lo descartamos: el modelo de elevación no ve los terraplenes sobre los que van las rutas). La **ubicación es aproximada**: la planilla de Vialidad nombra los tramos por localidades y no trae geometría, así que el servidor los ubica con la traza del IGN y la API Georef (`sources/vialidad-geo.mjs`), y solo dibuja los que coinciden con los km oficiales; los demás (límites provinciales, empalmes con rutas provinciales, accesos) no se dibujan. Solo rutas nacionales: las provinciales las informa cada provincia.
-- **Localidades**: los gobiernos locales de las ocho provincias (las del Litoral, Neuquén y Río Negro) (Registro Federal de Gobiernos Locales) y las ciudades vecinas de Paraguay, Brasil y Uruguay. El criterio es la población (Censo 2022): se muestran solo las de más de 150.000 habitantes con el mapa alejado y el piso baja a medida que se acerca el zoom (50.000, 20.000, 8.000, 3.000, 1.000, todas). Si dos nombres se pisan, queda el de la ciudad más grande.
-- **Ríos y puntos de medición**: la traza esquemática de los ríos grandes y las estaciones del monitor, más los ríos del **Comahue** (Neuquén, Limay, Negro y Colorado, la cuenca de Vaca Muerta) y los **ríos menores** (Corriente, Santa Lucía, Miriñay, Batel, Aguapey, Mocoretá, Gualeguay, Nogoyá, Feliciano, Guayquiraró, Riachuelo, Negro del Chaco, Piray Guazú y Miní, Colastiné, Leyes, Coronda, Malabrigo, Las Garzas y Barrancas) con las boyas hidrométricas del INA, y todas las **escalas de Prefectura** (republicadas por el INA) con su altura de hoy y sus niveles de alerta y evacuación. Los puertos aparecen desde el zoom 7. Se ve el valor al pasar el cursor.
-
-
-**Cómo se estima la exposición** (`public/rise.js`):
-
-- **Altura sobre el río** (`scripts/build-barrios.mjs` → `layers/barrios.json`): para cada barrio a menos de 12 km del Paraná, el Uruguay, el Paraguay o el Bermejo (o a menos de 4 km de uno de los ríos menores, si le queda más cerca), cota del terreno (SRTM 30 m de la NASA, vía [OpenTopoData](https://www.opentopodata.org/)) menos la cota del río en el punto más cercano. El río se toma como el mínimo de los puntos vecinos de su traza, porque el modelo de elevación aplana el agua.
-- **Subida del río** (`scripts/build-ratings.mjs` → `layers/ratings.json`): metros que sube el río por cada vez que se multiplica el caudal (h = a + b·ln Q), ajustados con ~3 años de alturas de Prefectura (vía INA) contra el caudal GloFAS de cada estación. Para cada fecha, la subida respecto del caudal mediano; desde la emisión del pronóstico del INA, la subida sigue lo que pronostica el INA para ese puerto.
-- **Estado**: inundación probable si la subida del río supera la altura del barrio; posible si le falta menos de un metro; poco probable en el resto.
-- **Bermejo y Paraguay** (`scripts/lib/rio.mjs`, `scripts/build-ratings.mjs`): el **Bermejo** usa la curva altura–caudal de El Colorado (2,2 m por cada vez que se multiplica el caudal, correlación 0,88), solo en el tramo bajo (desde Puerto Lavalle hacia abajo: aguas arriba, Embarcación y Orán son un río de piedemonte con crecidas torrenciales, donde esta cuenta no vale). El **Paraguay** no tiene curva ni pronóstico: la subida de cada día es la altura medida en Formosa o Puerto Pilcomayo (Prefectura) menos su mediana de 3 años, así que solo hay valor para los días con medición, hasta hoy. En el **Pilcomayo** no se estima nada.
-- **Ríos menores** (`scripts/build-cauces.mjs` → `layers/cauces.json`, `sources/gauges-extra.json`; `scripts/build-ratings.mjs cauces`): la traza sale de OpenStreetMap (ODbL), de la que se arma la cadena principal de cada río, y las boyas son las de la red de telemetría del INA ("sat2", altura hidrométrica). **Sin pronóstico**: el modelo de caudal (GloFAS) no sigue estos cauces y el INA no los pronostica. Como en el Paraguay, la subida de un día es la altura medida menos su mediana de los últimos tres años, y solo hay estimación para los días con medición. La altura del barrio sobre un arroyo es más incierta que sobre un río grande: el modelo de elevación (30 m) no distingue un cauce angosto. Un barrio se asigna al curso más cercano; si es un río menor, solo cuenta a menos de 4 km y a menos de 10 m sobre el agua, y si el terreno queda por debajo del nivel del río (el modelo de elevación no distingue el cauce), se marca "sin dato confiable" y no se estima.
-- **Comahue · Vaca Muerta** (botón "Comahue · Vaca Muerta" bajo el buscador): el Neuquén, el Limay, el Negro y el Colorado entran por el mismo camino que los ríos menores (traza de OpenStreetMap, boyas del INA: Chos Malal, Paso de Indios, Dique Ballester y Neuquén en el Neuquén; Isla Jordán, Paso Córdova y Primera Angostura en el Negro; Pata Mora, Puesto Hernández, Pichi Mahuida, Paso Alsina y Pedro Luro en el Colorado). **Caudales regulados**: las represas del Comahue (Alicurá, Piedra del Águila, Pichi Picún Leufú, El Chocón, Arroyito) manejan el río y el modelo de caudal no las ve, así que solo cuenta la altura medida, y esa altura varía poco (la diferencia entre un día bajo y uno alto es de uno o dos metros): una crecida de verdad solo la dan las maniobras de las represas. El Limay no tiene boya propia con datos: se usa la del Negro en Isla Jordán, aguas abajo de la confluencia. La ubicación del rótulo "Vaca Muerta" es aproximada (la zona principal de la formación) y no un límite. Los mosaicos satelitales cubren hasta 72,5°O y 42°S.
-- **Represas del Comahue** (casilla propia, `scripts/build-represas.mjs` → `layers/represas.json`): 11 represas y diques del Limay (Alicurá, Piedra del Águila, Pichi Picún Leufú, El Chocón, Arroyito) y del Neuquén (el complejo Cerros Colorados: Portezuelo Grande, Mari Menuco, Loma de la Lata, Planicie Banderita, El Chañar, y el dique Ingeniero Ballester). Cuadrados celestes; el nombre aparece desde el zoom 8 y la potencia, al pasar el cursor. Ubicación y potencia de [OpenStreetMap](https://www.openstreetmap.org/) (ODbL), lista curada a mano (hay cientos de muros de canales de riego sin nombre que no se muestran). No cambian la estimación: el mapa no modela las maniobras.
-- **Escalas de Prefectura** (`scripts/build-puertos.mjs` → `layers/puertos.json`, `sources/gauges-extra.json`): ubicación y niveles de alerta de las escalas de la red de Prefectura. Las que el monitor no usa (Delta, Río de la Plata, represas) se suman a las series que consulta el servidor, marcadas `grp: 'pna'`, y solo aparecen en el mapa.
-- **Qué no es**: una **estimación**, no un aviso oficial. El modelo de elevación puede errar varios metros (ve techos y árboles), la subida sale de un modelo, y no se consideran defensas, desagües ni lluvia local. No hay estimación donde la altura del río depende de las represas (Paraná arriba de Yacyretá), en el Delta (marea), en el Pilcomayo ni en el Bermejo alto. En el Chaco, muy llano, el error del modelo de elevación (varios metros) puede ser mayor que el relieve: ahí las estimaciones son menos confiables que en el Litoral.
-- **Municipios** (`scripts/build-municipios.mjs` → `layers/municipios.json`): misma idea que los barrios; las descargas se cachean en `data/cache/`.
-- Los scripts se corren a mano cuando se quiera actualizar (`node scripts/build-barrios.mjs`, `node scripts/build-municipios.mjs`, `node scripts/build-ratings.mjs`); las respuestas de elevación se cachean en `data/cache/`.
-
-**Compartir** (`public/share.js`): tres íconos, en el mapa público (abajo, en el centro) y en el monitor (debajo del selector de fecha): WhatsApp, X y copiar enlace. Comparten el estado del momento: el enlace del mapa lleva la vista y el reporte elegido (`#zoom/lat/lon[/rID]`); el del monitor, la estación (`#rosario`). El texto resume lo que se ve (por ejemplo, el tipo de reporte y hace cuánto se hizo). La herramienta de análisis no se comparte: es de acceso restringido. Las páginas tienen etiquetas Open Graph y de Twitter con una imagen de vista previa (`public/og-mapa.png`, `public/og-monitor.png`, 1200×630) hecha con el trazo del favicon, en azul marino y plata, y el nombre de cada página; también hay un `apple-touch-icon.png` para iOS. Se generan con `node scripts/build-og.mjs` (necesita Chrome o Edge; los textos se cambian en `PAGES` del script). Son estáticas, así que el enlace de un reporte muestra la vista previa general del mapa y el reporte se abre al tocar el enlace.
-
-**Sumar una capa** (a la herramienta de análisis): `public/analisis.js` tiene un motor propio y sin dependencias. Una capa raster por mosaicos es una entrada en `LAYERS` (una función `(nivel, fila, columna) → URL`) más una casilla en el panel; una capa vectorial se dibuja en `renderVec()`, que reproyecta en cada cuadro.
-
-Uso no comercial gratuito en Open-Meteo. Para uso comercial o alto tráfico, revisar sus [términos](https://open-meteo.com/en/terms).
+Los accesos por enlace (`#k=`) y la clave de `/stats` de versiones anteriores **ya no sirven**.
 
 ## Archivos
 
@@ -166,7 +149,7 @@ Uso no comercial gratuito en Open-Meteo. Para uso comercial o alto tráfico, rev
 | `public/admin.html`, `admin.js`, `admin.css` | panel de administración (reportes como base de datos) |
 | `localidades.mjs` | localidad más cercana a un punto |
 | `reports.mjs`, `access.mjs` | reportes de vecinos (validación, captcha, límites, confirmaciones) y accesos a la herramienta de análisis |
-| `scripts/admin.mjs` | administración desde el servidor: clave, accesos y moderación |
+| `scripts/admin.mjs` | administración desde el servidor: usuarios del panel y moderación |
 | `public/` | interfaz (HTML + JS + CSS, sin build) |
 | `scripts/calibrate.mjs` | recalibra los puntos tras editar `stations.json` |
 | `scripts/build-geo.mjs` | regenera `public/geo.json` desde Natural Earth |
@@ -240,23 +223,12 @@ Pensado para que el tráfico de los usuarios no se traslade a los servicios exte
 
 ## Estadísticas
 
-Contador propio (`analytics.mjs`), sin dependencias, sin cookies y sin terceros.
+Contador propio (`analytics.mjs`), sin dependencias, sin cookies y sin terceros. (La única cookie del sitio es la de sesión de quien ingresa al panel; los visitantes no reciben ninguna.)
 
 - **Visitas:** se cuentan las cargas de la página. Bots y clientes automatizados (buscadores, `curl`, navegadores sin interfaz, monitores) no cuentan.
 - **Visitantes únicos:** hash de la sal del día + IP + navegador. La IP no se guarda, y la sal se descarta al cambiar el día, así que no se puede seguir a nadie de un día a otro.
 - **Qué se guarda:** solo totales por día, durante 400 días, en la tabla `analytics_days`: visitas (por página, monitor o mapa), únicos, celular o compu, dominio de origen, localidades consultadas y compartidos: cuántas veces se tocó cada botón de compartir (WhatsApp, X, copiar enlace) y cuántas visitas llegaron por esos enlaces, que llevan `?via=wa`, `?via=x` o `?via=link`. Las localidades las avisa la página al elegir una, con un `sendBeacon` de pocos bytes.
-- **Página `/stats`:** privada. Sin la clave responde 404. La clave se genera la primera vez (queda en la base de datos) y se anuncia una sola vez en el log del servicio. Es también la clave de administración de la herramienta de análisis:
-
-```
-ssh mi-servidor "sudo -n /usr/bin/journalctl -u caudal --no-pager -n 100 | grep -o 'https?://[^ ]*stats?key=[^ ]*|/stats?key=[^ ]*'"
-```
-
-Para ver o cambiar la clave, con sudo y desde el servidor (la base es solo del usuario del servicio):
-
-```
-sudo -u caudal DATA_DIR=/opt/caudal/data /opt/node/bin/node /opt/caudal/app/scripts/admin.mjs clave
-sudo -u caudal DATA_DIR=/opt/caudal/data /opt/node/bin/node /opt/caudal/app/scripts/admin.mjs nueva-clave   # y reiniciar el servicio
-```
+- **Página `/stats`:** privada: solo la abre un administrador con sesión iniciada (enlace "Estadísticas" del panel); para los demás responde 404.
 
 **Monitoreo**: `GET /health` devuelve la antigüedad de cada fuente, los errores y los pedidos salientes por servicio. Responde **503** si el modelo tiene más de 6 h o las fuentes complementarias más de 3 h. Sirve para un chequeo externo como UptimeRobot.
 

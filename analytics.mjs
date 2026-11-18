@@ -5,7 +5,7 @@
 // - Se guardan solo totales por día: visitas, únicos, celular/compu, dominio de origen y
 //   localidades consultadas, visitas por página y compartidos (toques en WhatsApp, X o copiar enlace) con las visitas que
 //   llegan por esos enlaces (?via=wa|x|link). Los bots y clientes automatizados no cuentan.
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 const KEEP_DAYS = 400;
 const VIA = new Set(['wa', 'x', 'link']);
@@ -20,14 +20,6 @@ export async function createAnalytics({ store, ownHost, stationIds, log }) {
   const db = { days: store.analyticsDays(since) };
   let today = store.getDoc('analytics-today') ?? { day: null, salt: null, seen: [] };
   let seen = new Set(today.seen);
-
-  // clave para ver /stats (y administrar la herramienta de análisis): se genera una vez y se anuncia una sola vez en el log del servicio
-  let key = store.getDoc('stats-key');
-  if (!key) {
-    key = randomBytes(18).toString('base64url');
-    store.setDoc('stats-key', key);
-    log(`estadísticas: clave nueva generada → /stats?key=${key}`);
-  }
 
   let dirty = false;
   const touched = new Set(); // días con cambios sin guardar
@@ -101,19 +93,13 @@ export async function createAnalytics({ store, ownHost, stationIds, log }) {
   }
   setInterval(() => flush().catch((e) => log('estadísticas:', e.message)), 60e3).unref();
 
-  const authorized = (k) => {
-    if (!k) return false;
-    const a = Buffer.from(String(k)), b = Buffer.from(key);
-    return a.length === b.length && timingSafeEqual(a, b);
-  };
-
   // totales de un día (para el resumen diario de Telegram)
   const daySummary = (day) => {
     const b = db.days[day] || {};
     return { views: b.views || 0, uniques: b.uniques || 0, pages: b.pages || {}, shares: Object.values(b.shares || {}).reduce((a, v) => a + v, 0) };
   };
 
-  return { pageView, hit, flush, authorized, daySummary, report: (names, host) => report(db, names, host) };
+  return { pageView, hit, flush, daySummary, report: (names, host) => report(db, names, host) };
 }
 
 // ---------- página /stats (HTML sin JavaScript, con el estilo del sitio)

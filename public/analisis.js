@@ -26,38 +26,19 @@ const dLong = (iso) => parseDay(iso).toLocaleDateString('es-AR', { weekday: 'lon
 const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-// ---------- acceso: el código llega en el enlace (…/analisis#k=CÓDIGO), se guarda en este navegador y viaja en el encabezado Authorization
-const KEY_STORE = 'caudal-analisis';
-let KEY = '';
-try { KEY = localStorage.getItem(KEY_STORE) || ''; } catch {}
-{
-  const m = location.hash.match(/^#k=([\w-]+)$/);
-  if (m) { KEY = m[1]; try { localStorage.setItem(KEY_STORE, KEY); } catch {} history.replaceState(null, '', location.pathname); }
-}
-const fetchAuth = (u, opts = {}) => fetch(u, { ...opts, headers: { ...(opts.headers || {}), authorization: 'Bearer ' + KEY } });
-const json = (u) => fetchAuth(u).then((r) => (r.ok ? r.json() : Promise.reject(Object.assign(new Error(u), { status: r.status }))));
-const post = (u, body) => fetchAuth(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) }).then((r) => (r.ok ? r.json() : Promise.reject(Object.assign(new Error(u), { status: r.status }))));
+// ---------- acceso: usuario y contraseña en el panel (/admin); acá viaja la cookie de sesión. Sin sesión se vuelve al panel para ingresar.
+const toLogin = () => { location.replace('/admin?volver=analisis'); return new Promise(() => {}); };
+const fetchAuth = (u, opts = {}) => fetch(u, opts);
+const guard = (r, u) => {
+  if (r.status === 401 || r.status === 403) return toLogin();
+  return r.ok ? r.json() : Promise.reject(Object.assign(new Error(u), { status: r.status }));
+};
+const json = (u) => fetchAuth(u).then((r) => guard(r, u));
+const post = (u, body) => fetchAuth(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) }).then((r) => guard(r, u));
 const open = (u) => fetch(u).then((r) => (r.ok ? r.json() : Promise.reject(new Error(u)))); // datos públicos (sin acceso)
-
-// pantalla de ingreso: pide el código hasta que el servidor lo acepte
-async function gate() {
-  let wrong = false;
-  for (;;) {
-    if (KEY) {
-      try { return await json('/api/analisis/yo'); }
-      catch (e) { if (e.status !== 401 && e.status !== 429) throw e; if (e.status === 429) { wrong = 'Demasiados intentos. Esperá unos minutos.'; } else wrong = 'Ese código no es válido.'; KEY = ''; try { localStorage.removeItem(KEY_STORE); } catch {} }
-    }
-    const box = $('#login');
-    box.hidden = false;
-    $('#login-msg').textContent = wrong || '';
-    KEY = await new Promise((resolve) => { $('#login-form').onsubmit = (ev) => { ev.preventDefault(); resolve($('#login-key').value.trim()); }; });
-    try { localStorage.setItem(KEY_STORE, KEY); } catch {}
-  }
-}
-const ME = await gate();
-$('#login').hidden = true;
+const ME = await json('/api/analisis/yo');
 const ADMIN = ME.role === 'admin';
-$('#role').textContent = ADMIN ? 'administración' : 'autoridad · solo lectura';
+$('#role').textContent = `${ME.usuario} · ${ADMIN ? 'administración' : 'autoridad · solo lectura'}`;
 
 // ---------- datos
 const [data, extras, ratingsDoc, barrios, geo, cauDoc, pDoc, damDoc, munDoc] = await Promise.all([

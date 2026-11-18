@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createAnalytics } from './analytics.mjs';
 import { createReports } from './reports.mjs';
-import { createAccess } from './access.mjs';
+import { createAccess, COOKIE } from './access.mjs';
 import { createNotifier } from './notify.mjs';
 import { createLocalidades } from './localidades.mjs';
 
@@ -462,7 +462,7 @@ const countOut = (url) => { const h = new URL(url).host; outbound[h] = (outbound
 // Holgado a propósito: con CGNAT (habitual en redes móviles) cientos de personas comparten una IP.
 // RATE_LIMIT=0 lo desactiva (pruebas de carga).
 // rep: reportes nuevos; vote: confirmaciones; rlist: lecturas del mapa de reportes; auth: pedidos a la herramienta de análisis
-const RATE = { tiles: [3000, 60e3], sat: [600, 60e3], hit: [120, 60e3], rep: [20, 3600e3], vote: [120, 60e3], rlist: [240, 60e3], auth: [600, 60e3] }; // [pedidos, ventana ms]
+const RATE = { tiles: [3000, 60e3], sat: [600, 60e3], hit: [120, 60e3], login: [40, 600e3], rep: [20, 3600e3], vote: [120, 60e3], rlist: [240, 60e3], auth: [600, 60e3] }; // [pedidos, ventana ms]
 const hits = new Map();
 const clientIp = (req) => (process.env.TRUST_PROXY && req.headers['x-forwarded-for']?.split(',')[0].trim()) || req.socket.remoteAddress || '';
 function rateLimited(req, kind) {
@@ -574,22 +574,31 @@ const sendJSON = (res, status, obj, extra = {}) => {
 };
 const deviceOf = (req) => ({ ip: clientIp(req), ua: req.headers['user-agent'] || '' });
 
-// ---------- acceso a la herramienta de análisis: la clave de administrador o un acceso de autoridad (Authorization: Bearer …)
-// Tras muchos intentos fallidos desde una IP se corta por un rato (contra adivinar claves).
-const authFails = new Map();
+// ---------- sesiones del panel: usuario y contraseña, cookie HttpOnly (ver access.mjs).
+// Los pedidos que cambian datos tienen que venir del propio sitio (Origin o Sec-Fetch-Site); además la cookie es SameSite=Strict.
+const sameOrigin = (req) => {
+  const host = req.headers['x-forwarded-host'] || req.headers.host, o = req.headers.origin;
+  if (o) { try { return new URL(o).host === host; } catch { return false; } }
+  const sf = req.headers['sec-fetch-site'];
+  return sf === 'same-origin' || sf === 'none';
+};
+const isHttps = (req) => req.headers['x-forwarded-proto'] === 'https' || !!req.socket.encrypted;
+const sessionCookie = (req, value, maxAge) => `${COOKIE}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${isHttps(req) ? '; Secure' : ''}`;
 function authorize(req, res, need) {
-  const ip = clientIp(req), f = authFails.get(ip), live = f && Date.now() - f.t < 600e3;
-  if (live && f.n >= 20 && process.env.RATE_LIMIT !== '0') { sendText(res, 429, 'demasiados intentos', { 'retry-after': '600' }); return null; }
   if (rateLimited(req, 'auth')) { sendText(res, 429, 'demasiados pedidos', { 'retry-after': '60' }); return null; }
-  const role = access.roleOf((req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim());
-  if (!role) {
-    authFails.set(ip, { t: live ? f.t : Date.now(), n: (live ? f.n : 0) + 1 });
-    sendText(res, 401, 'acceso denegado'); return null;
-  }
-  if (need === 'admin' && role !== 'admin') { sendText(res, 403, 'solo el administrador'); return null; }
-  return role;
+  const u = access.fromRequest(req);
+  if (!u) { sendText(res, 401, 'acceso denegado'); return null; }
+  if (u.must_change) { sendJSON(res, 403, { error: 'cambiar_clave' }); return null; } // contraseña temporal: primero hay que cambiarla
+  if (need === 'admin' && u.role !== 'admin') { sendText(res, 403, 'solo el administrador'); return null; }
+  if (req.method !== 'GET' && req.method !== 'HEAD' && !sameOrigin(req)) { sendText(res, 403, 'origen no permitido'); return null; }
+  req.user = u;
+  return u.role;
 }
-setInterval(() => { const now = Date.now(); for (const [k, f] of authFails) if (now - f.t > 600e3) authFails.delete(k); }, 60e3).unref();
+// ingresos fallidos por IP: tras 20 en 10 minutos se corta (además del bloqueo por usuario de access.mjs)
+const loginFails = new Map();
+const loginBlocked = (req) => { const f = loginFails.get(clientIp(req)); return process.env.RATE_LIMIT !== '0' && !!f && Date.now() - f.t < 600e3 && f.n >= 20; };
+const loginFailed = (req) => { const ip = clientIp(req), f = loginFails.get(ip), live = f && Date.now() - f.t < 600e3; loginFails.set(ip, { t: live ? f.t : Date.now(), n: (live ? f.n : 0) + 1 }); };
+setInterval(() => { const now = Date.now(); for (const [k, f] of loginFails) if (now - f.t > 600e3) loginFails.delete(k); }, 60e3).unref();
 // capas de datos del mapa: solo para la herramienta de análisis (ver layers/)
 const LAYERS = new Set(['barrios', 'cauces', 'puertos', 'represas', 'municipios', 'ratings']);
 const PUBLIC_LAYERS = new Set(['cauces', 'puertos']); // los ríos y las escalas también se ven en el mapa público
@@ -629,6 +638,33 @@ const server = createServer(async (req, res) => {
         .filter((m) => m.c && m.pob).map((m) => ({ n: m.n, p: m.p, pob: m.pob, c: m.c })) }));
       return send(req, res, e, 'public, max-age=3600');
     }
+    // --- sesión: ingresar, ver quién soy, cambiar la contraseña, salir
+    if (p === '/api/sesion' && req.method === 'POST') {
+      if (!sameOrigin(req)) return sendJSON(res, 403, { error: 'origen no permitido' });
+      if (rateLimited(req, 'login') || loginBlocked(req)) return sendJSON(res, 429, { error: 'Demasiados intentos. Esperá unos minutos.' }, { 'retry-after': '600' });
+      const b = await readBody(req, 1024);
+      const r = await access.login(b.usuario, b.clave, clientIp(req));
+      if (!r.ok) { loginFailed(req); return sendJSON(res, r.status, { error: r.error }); }
+      return sendJSON(res, 200, r.user, { 'set-cookie': sessionCookie(req, r.token, r.maxAge) });
+    }
+    if (p === '/api/sesion' && req.method === 'GET') {
+      const u = access.fromRequest(req);
+      return u ? sendJSON(res, 200, access.publicUser(u)) : sendJSON(res, 401, { error: 'sin sesión' });
+    }
+    if (p === '/api/sesion/salir' && req.method === 'POST') {
+      if (!sameOrigin(req)) return sendJSON(res, 403, { error: 'origen no permitido' });
+      access.logout(access.cookieOf(req));
+      return sendJSON(res, 200, { ok: true }, { 'set-cookie': sessionCookie(req, '', 0) });
+    }
+    if (p === '/api/sesion/clave' && req.method === 'POST') {
+      const u = access.fromRequest(req);
+      if (!u) return sendJSON(res, 401, { error: 'sin sesión' });
+      if (!sameOrigin(req)) return sendJSON(res, 403, { error: 'origen no permitido' });
+      if (rateLimited(req, 'login')) return sendJSON(res, 429, { error: 'Demasiados intentos. Esperá unos minutos.' });
+      const b = await readBody(req, 1024);
+      const r = await access.changePassword(u, b.actual, b.nueva);
+      return sendJSON(res, r.ok ? 200 : r.status, r.ok ? { ok: true } : { error: r.error });
+    }
     const cm = p.match(/^\/api\/capas\/([a-z]+)\.json$/);
     if (cm) {
       if (!LAYERS.has(cm[1])) return sendText(res, 404, 'no encontrado');
@@ -636,7 +672,7 @@ const server = createServer(async (req, res) => {
       if (!authorize(req, res)) return;
       return send(req, res, await cachedFile(path.join(ROOT, 'layers', cm[1] + '.json')), 'private, no-cache');
     }
-    if (p === '/api/analisis/yo') { const role = authorize(req, res); return role && sendJSON(res, 200, { role }); }
+    if (p === '/api/analisis/yo') { const role = authorize(req, res); return role && sendJSON(res, 200, { role, usuario: req.user.username }); }
     if (p === '/api/analisis/reportes') {
       const role = authorize(req, res); if (!role) return;
       const dias = Math.min(Math.max(+url.searchParams.get('dias') || 30, 1), 3650);
@@ -667,15 +703,23 @@ const server = createServer(async (req, res) => {
       if (req.method === 'POST') { const b = await readBody(req); reports.setSettings({ abierto: b.abierto, tope: b.tope }); }
       return sendJSON(res, 200, reports.adminSettings());
     }
-    if (p === '/api/admin/accesos') {
+    // usuarios del panel (solo administrador). Las contraseñas temporales se devuelven una sola vez.
+    if (p === '/api/admin/usuarios') {
       if (!authorize(req, res, 'admin')) return;
-      if (req.method === 'POST') { const b = await readBody(req); return sendJSON(res, 201, access.create(b.label)); }
-      return sendJSON(res, 200, { accesos: access.list() });
+      if (req.method === 'POST') {
+        const b = await readBody(req, 1024);
+        const r = await access.createUser(b.usuario, b.rol);
+        return sendJSON(res, r.ok ? 201 : r.status, r.ok ? { id: r.id, usuario: r.usuario, rol: r.rol, clave: r.clave } : { error: r.error });
+      }
+      return sendJSON(res, 200, { usuarios: access.listUsers(), yo: req.user.id });
     }
-    const am = p.match(/^\/api\/admin\/accesos\/(\d+)\/revocar$/);
-    if (am && req.method === 'POST') {
+    const um = p.match(/^\/api\/admin\/usuarios\/(\d+)\/(resetear|desactivar|activar)$/);
+    if (um && req.method === 'POST') {
       if (!authorize(req, res, 'admin')) return;
-      return sendJSON(res, 200, { ok: access.revoke(+am[1]) });
+      const id = +um[1];
+      if (id === req.user.id && um[2] === 'desactivar') return sendJSON(res, 400, { error: 'No podés desactivar tu propio usuario.' });
+      const r = um[2] === 'resetear' ? await access.resetPassword(id) : access.setDisabled(id, um[2] === 'desactivar');
+      return sendJSON(res, r.ok ? 200 : r.status, r.ok ? { ok: true, usuario: r.usuario, clave: r.clave } : { error: r.error });
     }
     // estadísticas: aviso de la página al elegir una localidad (cuerpo mínimo, sin cookies)
     if (p === '/api/hit' && req.method === 'POST') {
@@ -686,9 +730,10 @@ const server = createServer(async (req, res) => {
       analytics.hit(req, body.slice(0, 300));
       res.writeHead(204); return res.end();
     }
-    // estadísticas privadas: sin la clave, la página no existe
+    // estadísticas privadas: solo para un administrador con sesión; para los demás, la página no existe
     if (p === '/stats') {
-      if (!analytics.authorized(url.searchParams.get('key'))) return sendText(res, 404, 'no encontrado');
+      const su = access.fromRequest(req);
+      if (!su || su.role !== 'admin' || su.must_change) return sendText(res, 404, 'no encontrado');
       res.writeHead(200, { 'content-type': TYPES['.html'], 'cache-control': 'no-store', 'x-robots-tag': 'noindex' });
       return res.end(analytics.report(stationNames, req.headers['x-forwarded-host'] || req.headers.host));
     }
@@ -755,7 +800,7 @@ const allStations = await loadStations();
 const stationNames = Object.fromEntries(allStations.map((s) => [s.id, s.kind === 'trib' ? `río ${s.name}` : s.name]));
 const analytics = await createAnalytics({ store, ownHost: process.env.SITE_HOST || null,
   stationIds: new Set(allStations.map((s) => s.id)), log });
-const access = createAccess({ store, isAdminKey: analytics.authorized });
+const access = createAccess({ store, log });
 const localidades = createLocalidades(ROOT);
 const notifier = createNotifier({ store, analytics, localidades, log }); // avisos por Telegram (opcional)
 const reports = createReports({ store, log, localidades, onCreate: notifier.newReport, onAlert: notifier.alert, turnstile: { site: process.env.TURNSTILE_SITE_KEY || null, secret: process.env.TURNSTILE_SECRET_KEY || null } });

@@ -10,7 +10,8 @@
 //   analytics_days     totales por día de las estadísticas (sin datos personales)
 //   reports            reportes de vecinos (anegamientos), con su vencimiento y moderación
 //   report_votes       "sigue así" / "ya bajó" de otros usuarios (uno por dispositivo y reporte)
-//   access_tokens      accesos de solo lectura para la herramienta de análisis (autoridades); se guarda el hash
+//   users, sessions    usuarios del panel (contraseña con scrypt) y sus sesiones (solo el hash del código de la cookie)
+//   access_tokens      (en desuso) accesos por enlace de versiones anteriores; ya no se aceptan
 //
 // Los mosaicos y las imágenes satelitales siguen siendo archivos (son binarios y se sirven directo del disco).
 // migrateLegacy() importa los JSON de versiones anteriores la primera vez; no los borra ni los modifica.
@@ -48,6 +49,21 @@ CREATE TABLE IF NOT EXISTS report_votes (
   rhash TEXT NOT NULL, v TEXT NOT NULL, at INTEGER NOT NULL,
   PRIMARY KEY (report_id, rhash)
 ) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL UNIQUE,     -- en minúsculas
+  pass TEXT NOT NULL,                -- scrypt$N$r$p$sal$clave
+  role TEXT NOT NULL,                -- admin | autoridad
+  created INTEGER NOT NULL, last_login INTEGER,
+  disabled INTEGER NOT NULL DEFAULT 0,
+  must_change INTEGER NOT NULL DEFAULT 0   -- 1 = contraseña temporal: hay que cambiarla al entrar
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,               -- SHA-256 del código de la cookie
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  created INTEGER NOT NULL, last_seen INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id);
 CREATE TABLE IF NOT EXISTS access_tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT, hash TEXT NOT NULL UNIQUE, label TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'autoridad', created INTEGER NOT NULL, revoked INTEGER, last_used INTEGER

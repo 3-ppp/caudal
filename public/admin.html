@@ -13,12 +13,25 @@
 </head>
 <body>
   <div id="login" class="login" hidden>
-    <form id="login-form" class="login-box" autocomplete="off">
+    <form id="login-form" class="login-box" autocomplete="on">
       <h1>:~# caudal_</h1>
-      <p>Panel de administración y autoridades. Si te dieron un enlace, abrilo tal cual; si te dieron un código, pegalo acá.</p>
-      <input id="login-key" type="password" placeholder="código de acceso" autocomplete="off" spellcheck="false" required>
+      <p>Panel de administración y autoridades.</p>
+      <label class="fld">Usuario<input id="login-user" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+      <label class="fld">Contraseña<input id="login-key" name="password" type="password" autocomplete="current-password" required></label>
       <p id="login-msg" class="err" role="alert"></p>
       <button class="btn btn-primary" type="submit">Entrar</button>
+    </form>
+  </div>
+
+  <div id="pw" class="login" hidden>
+    <form id="pw-form" class="login-box" autocomplete="off">
+      <h1 id="pw-title">Cambiar contraseña</h1>
+      <p id="pw-hint">Elegí una contraseña de al menos 12 caracteres.</p>
+      <label class="fld">Contraseña actual<input id="pw-old" type="password" autocomplete="current-password" required></label>
+      <label class="fld">Contraseña nueva<input id="pw-new" type="password" autocomplete="new-password" minlength="12" required></label>
+      <label class="fld">Repetí la nueva<input id="pw-new2" type="password" autocomplete="new-password" minlength="12" required></label>
+      <p id="pw-msg" class="err" role="alert"></p>
+      <div class="btn-row"><button class="btn btn-primary" type="submit">Guardar</button><button class="btn" id="pw-cancel" type="button">Cancelar</button></div>
     </form>
   </div>
 
@@ -27,13 +40,13 @@
       <div class="brand">:~# caudal_</div>
       <div class="who" id="role">—</div>
       <button class="nav on" data-view="reportes" type="button"><span>Reportes</span><span class="count" id="n-rep"></span></button>
-      <button class="nav" data-view="accesos" id="nav-acc" type="button" hidden><span>Accesos</span></button>
+      <button class="nav" data-view="usuarios" id="nav-users" type="button" hidden><span>Usuarios</span></button>
       <div class="grp">Herramientas</div>
       <a class="nav sub" href="/analisis"><span>Mapa de análisis</span><span>↗</span></a>
       <a class="nav sub" href="/mapa"><span>Mapa público</span><span>↗</span></a>
       <a class="nav sub" href="/"><span>Monitor de caudal</span><span>↗</span></a>
-      <a class="nav sub" id="nav-stats" href="#" target="_blank" rel="noopener noreferrer" hidden><span>Estadísticas</span><span>↗</span></a>
-      <div class="side-foot"><button class="btn sm" id="theme" type="button">tema</button><button class="btn sm" id="logout" type="button">salir</button></div>
+      <a class="nav sub" id="nav-stats" href="/stats" target="_blank" rel="noopener" hidden><span>Estadísticas</span><span>↗</span></a>
+      <div class="side-foot"><button class="btn sm" id="theme" type="button">tema</button><button class="btn sm" id="pw-open" type="button">contraseña</button><button class="btn sm" id="logout" type="button">salir</button></div>
     </aside>
 
     <main class="main">
@@ -74,11 +87,11 @@
         <div id="box"></div>
       </section>
 
-      <section id="v-accesos" hidden>
-        <header class="head"><h1>Accesos</h1><p class="sub">Cada enlace da acceso de solo lectura a este panel y al mapa de análisis. Crealo para quien lo necesite y revocalo cuando termine.</p></header>
-        <form id="acc-form" class="acc-form"><input id="acc-label" type="text" maxlength="80" placeholder="Para quién (p. ej. Defensa Civil Corrientes)" autocomplete="off" aria-label="Para quién"><button class="btn btn-primary" type="submit">Crear acceso</button></form>
-        <div id="acc-new"></div>
-        <div id="acc-list"></div>
+      <section id="v-usuarios" hidden>
+        <header class="head"><h1>Usuarios</h1><p class="sub">Quién puede entrar al panel y a la herramienta de análisis. Las autoridades son de solo lectura. Al crear un usuario o resetear su clave se genera una contraseña temporal que se muestra una sola vez; la persona tiene que cambiarla al entrar.</p></header>
+        <form id="user-form" class="acc-form"><input id="user-name" type="text" maxlength="32" placeholder="Usuario (p. ej. defensa.civil.corrientes)" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Usuario"><select id="user-role" aria-label="Rol"><option value="autoridad">Autoridad (solo lectura)</option><option value="admin">Administración</option></select><button class="btn btn-primary" type="submit">Crear usuario</button></form>
+        <div id="user-new"></div>
+        <div id="user-list"></div>
       </section>
     </main>
 

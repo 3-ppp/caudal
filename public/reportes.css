@@ -63,7 +63,11 @@ body.reporting #card { display: none; }
   .rep-top { top: 8px; left: 8px; right: 72px; width: auto; }
   #card:not([hidden]) ~ .fab { display: none; }
   .sheet { bottom: 4px; max-height: 78%; }
-  body.reporting .rep-top, body.reporting .zoom-ctl { display: none; }
+  body.reporting .rep-top { display: none; }
+  .sheet #rep-step { display: inline; }
+  .sheet.step-loc #rep-body, .sheet.step-loc #rep-send, .sheet.step-data #rep-loc-box, .sheet.step-data #rep-next { display: none; }
+  .sheet.step-loc #rep-next, .sheet.step-data #rep-back { display: inline-block; }
+  .sheet.step-loc { padding-bottom: 8px; }
 }
 .lyr-row[hidden] { display: none; }
 
@@ -80,3 +84,8 @@ body.reporting #card { display: none; }
 /* la atribución de abajo ocupa 2 líneas (tablet) o 3 (celular): la barra de compartir y el botón de reportar suben para no taparla */
 @media (max-width: 900px) { #share-bar { bottom: 46px; } .fab { bottom: 94px; } }
 @media (max-width: 520px) { #share-bar { bottom: 56px; } .fab { bottom: 104px; } }
+
+/* pasos del reporte (solo celular; en la compu el panel muestra todo junto) */
+.sheet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.sheet-head .kicker { margin: 0; }
+#rep-next, #rep-back, #rep-step { display: none; }

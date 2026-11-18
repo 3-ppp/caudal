@@ -214,6 +214,7 @@ function render() {
   view.classList.add('sat');
   SAT.render(levelFor());
   const s = scale();
+  if (!form.hidden) placePin();
   CTX?.render(ctxArgs());
   REP.render({ X: (lon) => sx(lon, s), Y: (lat) => sy(lat, s), W, H, z: V.z });
   syncHash();
@@ -355,16 +356,37 @@ const form = $('#rep-form'), pin = $('#pin');
 let openedAt = 0;
 // el formulario tapa parte del mapa: la cruz va en el centro de lo que queda a la vista (a la izquierda del formulario en la
 // compu; arriba del formulario en el celular)
-function pinPos() {
+function freeCenter() {
   if (form.hidden) return { x: W / 2, y: H / 2 };
   const vr = view.getBoundingClientRect(), fr = form.getBoundingClientRect();
   return fr.width > W * 0.85 ? { x: W / 2, y: Math.max(60, (fr.top - vr.top) / 2) } : { x: Math.max(80, (fr.left - vr.left) / 2), y: H / 2 };
+}
+// En el celular el reporte tiene dos pasos. En el paso 1 la cruz está fija en pantalla y se mueve el mapa por debajo; al pasar al
+// paso 2 el punto queda fijado (lockedPt) y la cruz se queda sobre ese lugar del mapa aunque se lo arrastre.
+let step = 'loc', lockedPt = null;
+const isMobile = () => matchMedia('(max-width: 760px)').matches;
+function pinPos() {
+  if (lockedPt) { const s = scale(); return { x: sx(lockedPt.lon, s), y: sy(lockedPt.lat, s) }; }
+  return freeCenter();
 }
 function placePin() {
   const { x, y } = pinPos();
   pin.style.left = x + 'px'; pin.style.top = y + 'px';
 }
-const pinLatLon = () => { const { x, y } = pinPos(), s = scale(); return { lon: V.lon + (x - W / 2) / (s * COS), lat: V.lat - (y - H / 2) / s }; };
+const pinLatLon = () => { if (lockedPt) return lockedPt; const { x, y } = freeCenter(), s = scale(); return { lon: V.lon + (x - W / 2) / (s * COS), lat: V.lat - (y - H / 2) / s }; };
+// cambia de paso (solo celular). El formulario cambia de alto: el mapa se corre para que el punto quede en el centro de lo que se ve
+function setStep(next) {
+  const pt = pinLatLon();
+  step = next;
+  form.classList.toggle('step-loc', next === 'loc'); form.classList.toggle('step-data', next === 'data');
+  $('#rep-title').textContent = next === 'loc' ? '¿Dónde es?' : 'Tu reporte';
+  $('#rep-step').textContent = next === 'loc' ? ' · 1 de 2' : ' · 2 de 2';
+  if (!isMobile()) { lockedPt = null; return; }
+  lockedPt = next === 'data' ? pt : null;
+  const { x, y } = freeCenter(), s = scale();
+  flyTo({ lon: pt.lon - (x - W / 2) / (s * COS), lat: pt.lat + (y - H / 2) / s, z: V.z }, 250);
+  placePin(); checkZoom();
+}
 $('#rep-kinds').innerHTML = Object.entries(KIND).map(([k, v], i) => `<label class="opt"><input type="radio" name="kind" value="${k}"${i === 0 ? ' checked' : ''}><span><i class="rp-sw k-${k}"></i>${v.n}</span></label>`).join('');
 $('#rep-sevs').innerHTML = Object.entries(SEV).map(([k, v]) => `<label class="opt"><input type="radio" name="sev" value="${k}"${k === '2' ? ' checked' : ''}><span>${v}</span></label>`).join('');
 // vuela hasta una localidad dejándola bajo la cruz (que no está en el centro de la pantalla: el formulario tapa parte del mapa)
@@ -406,12 +428,15 @@ function openForm() {
   form.hidden = false; pin.hidden = false; $('#rep-btn').hidden = true; $('#share-bar').hidden = true;
   $('#rep-msg').textContent = ''; $('#rep-note').value = ''; locIn.value = ''; locHits = []; showLoc();
   openedAt = Date.now(); zoomOk = null;
+  lockedPt = null; step = 'loc'; form.classList.add('step-loc'); form.classList.remove('step-data');
+  $('#rep-title').textContent = '¿Dónde es?'; $('#rep-step').textContent = ' · 1 de 2';
   if (V.z < 12) flyTo({ lon: V.lon, lat: V.lat, z: 12.5 });
   document.body.classList.add('reporting');
   placePin();
   checkZoom();
 }
 function closeForm() {
+  lockedPt = null;
   form.hidden = true; pin.hidden = true; $('#rep-btn').hidden = false; $('#share-bar').hidden = false;
   document.body.classList.remove('reporting');
 }
@@ -419,13 +444,16 @@ function closeForm() {
 let zoomOk = null;
 function checkZoom() {
   placePin();
-  const ok = V.z >= 11.5;
-  $('#rep-send').disabled = !ok;
+  // el zoom se exige para marcar el punto (paso 1 y compu); en el paso 2 del celular el punto ya está fijado
+  const ok = V.z >= 11.5 || !!lockedPt;
+  $('#rep-send').disabled = !ok; $('#rep-next').disabled = !ok;
   // el aviso de zoom solo se escribe cuando cambia el estado, para no pisar los mensajes del buscador de localidad
   if (ok !== zoomOk) { zoomOk = ok; if (!ok) $('#rep-hint').textContent = 'Acercate hasta ver la calle para marcar el lugar con precisión.'; }
 }
 $('#rep-btn').addEventListener('click', openForm);
 $('#rep-cancel').addEventListener('click', closeForm);
+$('#rep-next').addEventListener('click', () => setStep('data'));
+$('#rep-back').addEventListener('click', () => setStep('loc'));
 setInterval(() => { if (!form.hidden) checkZoom(); }, 400);
 form.addEventListener('submit', async (ev) => {
   ev.preventDefault();

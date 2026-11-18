@@ -66,12 +66,17 @@
     <button id="rep-btn" class="fab" type="button">+ reportar agua</button>
     <div id="share-bar" class="float"><div id="share"></div></div>
 
-    <form id="rep-form" class="float sheet" hidden autocomplete="off">
-      <p class="kicker">reportar</p>
-      <h2>¿Dónde es?</h2>
-      <label class="lbl" for="rep-loc">Escribí tu localidad…</label>
-      <div class="locsearch"><input id="rep-loc" type="text" placeholder="p. ej. Corrientes, Goya, Posadas" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="rep-loc-res"><ul id="rep-loc-res" role="listbox" hidden></ul></div>
-      <p class="small muted" id="rep-hint">…o mové el mapa con el dedo. La cruz marca el punto: acercate hasta ver la calle y dejala sobre el lugar exacto.</p>
+    <form id="rep-form" class="float sheet step-loc" hidden autocomplete="off">
+      <div class="sheet-head">
+        <div><p class="kicker">reportar<span id="rep-step"> · 1 de 2</span></p><h2 id="rep-title">¿Dónde es?</h2></div>
+        <button class="btn btn-text" id="rep-back" type="button">← cambiar punto</button>
+      </div>
+      <div id="rep-loc-box">
+        <label class="lbl" for="rep-loc">Escribí tu localidad…</label>
+        <div class="locsearch"><input id="rep-loc" type="text" placeholder="p. ej. Corrientes, Goya, Posadas" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="rep-loc-res"><ul id="rep-loc-res" role="listbox" hidden></ul></div>
+        <p class="small muted" id="rep-hint">…o mové el mapa: la cruz marca el punto. Acercate hasta ver la calle.</p>
+      </div>
+      <div id="rep-body">
       <p class="lbl">¿Qué está pasando?</p>
       <div class="opts" id="rep-kinds" role="radiogroup" aria-label="Qué está pasando"></div>
       <p class="lbl">¿Cuánta agua hay?</p>
@@ -81,7 +86,8 @@
       <input id="rep-hp" class="hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
       <details class="help"><summary class="small muted">qué se publica</summary><p class="small muted">Solo el punto marcado (redondeado a unos 100 m), el tipo, la cantidad de agua y tu nota, sin tu nombre ni tu IP. Un reporte dura 3 días: el último día se ve en gris y cada vez más tenue, y se retira si nadie lo confirma. Otros vecinos pueden confirmarlo ("sigue así" lo renueva) o decir que ya bajó el agua. Son avisos de vecinos, sin verificar.</p></details>
       <p id="rep-msg" class="small st wet" role="alert"></p>
-      <div class="row"><button class="btn btn-text" id="rep-cancel" type="button">cancelar</button><button class="btn btn-text btn-go" id="rep-send" type="submit">enviar reporte</button></div>
+      </div>
+      <div class="row"><button class="btn btn-text" id="rep-cancel" type="button">cancelar</button><button class="btn btn-text btn-go" id="rep-next" type="button">siguiente →</button><button class="btn btn-text btn-go" id="rep-send" type="submit">enviar reporte</button></div>
     </form>
 
     <p class="attrib small muted">Imagen: Sentinel-2 cloudless © EOX. Los reportes son de vecinos y no están verificados: no reemplazan los avisos oficiales.</p>

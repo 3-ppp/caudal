@@ -107,7 +107,13 @@ export async function createAnalytics({ store, ownHost, stationIds, log }) {
     return a.length === b.length && timingSafeEqual(a, b);
   };
 
-  return { pageView, hit, flush, authorized, report: (names, host) => report(db, names, host) };
+  // totales de un día (para el resumen diario de Telegram)
+  const daySummary = (day) => {
+    const b = db.days[day] || {};
+    return { views: b.views || 0, uniques: b.uniques || 0, pages: b.pages || {}, shares: Object.values(b.shares || {}).reduce((a, v) => a + v, 0) };
+  };
+
+  return { pageView, hit, flush, authorized, daySummary, report: (names, host) => report(db, names, host) };
 }
 
 // ---------- página /stats (HTML sin JavaScript, con el estilo del sitio)

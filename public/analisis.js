@@ -6,7 +6,7 @@
 // entrada en LAYERS (raster por mosaicos) o dibujar en la capa vectorial.
 import { createRise } from './rise.js';
 import { createRutas, CLS, TXT } from './rutas.js';
-import { createReportLayer, KIND, SEV, ago } from './reportes.js';
+import { createReportLayer, KIND, SEV, ago, vigencia } from './reportes.js';
 
 const $ = (s) => document.querySelector(s);
 const NS = 'http://www.w3.org/2000/svg';
@@ -254,12 +254,12 @@ if (ADMIN) {
 function drawRepCard() {
   const r = REP.items.find((x) => x.id === selRep), card = $('#card');
   if (!r) { card.hidden = true; return; }
-  const near = REP.nearby(r), vig = r.x > repState.now && !r.h;
+  const near = REP.nearby(r), vg = vigencia(r, repState.now);
   card.dataset.k = 'rep';
   card.innerHTML = `<button class="btn x" id="card-x" type="button" aria-label="Cerrar">x</button>` +
     `<p class="kicker">reporte-de-vecinos</p><h2>${esc(KIND[r.k].n)}</h2><div class="muted">${repDate(r.t)} · ${ago(r.t, repState.now)}</div>` +
     `<dl><dt>Cuánta agua</dt><dd>${esc(SEV[r.s])}</dd><dt>Confirmaciones</dt><dd>${r.up} sigue · ${r.dn} ya bajó</dd>` +
-    `<dt>Estado</dt><dd class="st ${r.h ? 'na' : vig ? 'near' : ''}">${r.h ? 'oculto por moderación' : vig ? 'vigente' : 'vencido'}</dd>` +
+    `<dt>Estado</dt><dd class="st ${r.h || vg.k === 'gone' ? 'na' : vg.k === 'fade' ? 'near' : ''}">${r.h ? 'oculto por moderación' : vg.t}</dd>` +
     `<dt>Cerca (300 m, 24 h)</dt><dd>${near ? `${near} más` : 'ninguno'}</dd></dl>` +
     (r.n ? `<p class="rp-note">“${esc(r.n)}”</p>` : '') +
     `<p class="small muted">Dato de un vecino, sin verificar. Ubicación redondeada a unos 100 m.</p>` +

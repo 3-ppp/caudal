@@ -4,7 +4,7 @@
 
 Caudal diario de los ríos Paraná y Uruguay, de sus nacientes al Río de la Plata. Incluye un mapa con zoom y fondo satelital opcional, el perfil a lo largo de cada río, la serie de cada punto, el pronóstico a 30 días, las alturas medidas, el caudal de las represas y la vista satelital. Además:
 
-- un **mapa público de reportes de vecinos** (`/mapa.html`): cualquiera marca dónde hay agua (calle anegada, viviendas, ruta cortada, río desbordado) y otros vecinos confirman o dicen que ya bajó;
+- un **mapa público de reportes de vecinos** (`/mapa`): cualquiera marca dónde hay agua (calle anegada, viviendas, ruta cortada, río desbordado) y otros vecinos confirman o dicen que ya bajó;
 - una **herramienta de análisis** (`/analisis`, con acceso restringido) para administración y autoridades: todas las capas (barrios populares, ríos, rutas, represas) con los reportes encima.
 
 Sin dependencias: solo **Node 22.13 o más nuevo** (la base de datos usa el módulo `node:sqlite` que trae Node).
@@ -68,11 +68,11 @@ Fuentes complementarias (módulos opcionales en `sources/`; si uno falla, el res
 
 ## Mapa público: reportes de vecinos
 
-`/mapa.html` (enlace "mapa" en la barra superior): la imagen satelital y, encima, lo que marca la gente. Como contexto muestra las **localidades** y los **ríos con sus medidores** (boyas del INA y escalas de Prefectura: al tocar uno se ve la altura de hoy y sus niveles de alerta y evacuación), con dos casillas para apagarlos (`public/contexto.js`). Las demás capas (barrios populares, rutas, represas) están solo en la herramienta de análisis (más abajo).
+`/mapa` (enlace "mapa" en la barra superior): la imagen satelital y, encima, lo que marca la gente. Como contexto muestra las **localidades** y los **ríos con sus medidores** (boyas del INA y escalas de Prefectura: al tocar uno se ve la altura de hoy y sus niveles de alerta y evacuación), con dos casillas para apagarlos (`public/contexto.js`). Las demás capas (barrios populares, rutas, represas) están solo en la herramienta de análisis (más abajo).
 
 - **Reportar** (`+ reportar agua`): se escribe la localidad (el buscador sugiere entre los gobiernos locales de las provincias del mapa y las ciudades vecinas, y lleva el mapa hasta ahí) o, si no aparece, se mueve el mapa a mano. En los dos casos la cruz queda sobre el lugar exacto. Después se elige qué pasa (calle anegada, agua en viviendas, ruta o camino cortado, río desbordado), cuánta agua hay (poca, media, mucha) y, si se quiere, una nota de hasta 140 caracteres sin enlaces. No hace falta cuenta. Hay que acercarse hasta ver la calle para enviar. Los tipos tienen color y forma distintos (círculo, cuadrado, triángulo, rombo).
-- **Confirmar**: tocando un reporte se ve el detalle y los reportes parecidos cerca (300 m, 24 h), y cualquiera puede decir "sigue así" (lo mantiene vigente un día más, hasta 4 días en total) o "ya bajó" (con dos votos de "ya bajó", más que los de "sigue", el reporte deja de mostrarse).
-- **Vencimiento**: un reporte dura 48 horas. La base conserva todos (también los vencidos y los ocultos) para la herramienta de análisis.
+- **Confirmar**: tocando un reporte se ve el detalle y los reportes parecidos cerca (300 m, 24 h), y cualquiera puede decir "sigue así" (lo renueva por otras 72 horas, hasta 7 días en total) o "ya bajó" (con dos votos de "ya bajó", más que los de "sigue", el reporte deja de mostrarse).
+- **Vencimiento**: un reporte dura **72 horas**. En las **últimas 24 horas** pasa a una transición: el marcador se pone gris, con trazo punteado, y se va apagando hasta desaparecer; la ficha dice "por vencer · se retira en N h". Un "sigue así" lo renueva (vuelve a su color y le da otras 72 horas). La base conserva todos (también los vencidos y los ocultos) para la herramienta de análisis.
 - La vista y el reporte elegido van en la URL (`#zoom/lat/lon[/rID]`), así que se puede compartir.
 
 **Qué se guarda de cada reporte**: la hora, el punto **redondeado a unos 100 m**, el tipo, la gravedad, la nota y un hash del dispositivo (IP + navegador + sal del día) que sirve para poner límites y contar dispositivos distintos. **No se guarda la IP**, y la sal cambia todos los días: no se puede seguir a nadie de un día a otro. La ubicación del dispositivo (botón "mi ubicación") solo se usa en el navegador para centrar el mapa y no se envía.
@@ -86,6 +86,15 @@ Fuentes complementarias (módulos opcionales en `sources/`; si uno falla, el res
 - **Moderación**: el administrador oculta un reporte desde la herramienta de análisis (no se borra: queda para auditar) o con `scripts/admin.mjs ocultar <id>`.
 
 Los reportes son avisos de vecinos **sin verificar** y no reemplazan a los avisos oficiales; el mapa lo dice en pantalla y recuerda el 911.
+
+## Avisos por Telegram (opcional)
+
+`notify.mjs`, sin dependencias: el servidor le manda un mensaje a un chat tuyo cada vez que entra un **reporte nuevo** (tipo, cantidad de agua, localidad más cercana, la nota y un enlace al punto en el mapa) y, a las 21 h (hora de Argentina), un **resumen del día** si hubo uso (visitas, únicos, mapa y monitor, compartidos, reportes nuevos y confirmaciones). Sirve para saber cuándo la app se usa de verdad.
+
+- Para no llenar el chat en una crecida, el primer reporte avisa enseguida y los que llegan en el minuto siguiente salen juntos en un solo mensaje.
+- Un aviso que falla no afecta al reporte ni al sitio. El log nunca incluye el token.
+- **Configuración**: se crea un bot con [@BotFather](https://t.me/BotFather) (`/newbot`), se le escribe un mensaje al bot (o se lo suma a un grupo) y se abre `https://api.telegram.org/bot<TOKEN>/getUpdates` para leer `chat.id`. Las dos variables van en el mismo `/etc/caudal.env` del captcha: `TELEGRAM_BOT_TOKEN=…` y `TELEGRAM_CHAT_ID=…`. Opcionales: `SITE_URL` (para los enlaces) y `TELEGRAM_API`. Sin las dos primeras no se envía nada.
+- **Privacidad**: los avisos llevan el punto del reporte (ya redondeado a ~100 m) y la nota a Telegram, un tercero. Van solo a tu chat; si el chat es un grupo, lo ve todo el grupo.
 
 ## Herramienta de análisis (capas)
 
@@ -136,6 +145,7 @@ Uso no comercial gratuito en Open-Meteo. Para uso comercial o alto tráfico, rev
 | `stations.json` | puntos de cada río (nombres, coordenadas nominales): `main` y `tributaries` del Paraná, `uruguay` |
 | `data/stations.calibrated.json` | puntos ajustados a la celda del cauce en GloFAS |
 | `db.mjs` | la base de datos SQLite (esquema, funciones de acceso y migración desde los JSON anteriores) |
+| `notify.mjs` | avisos por Telegram: reportes nuevos y resumen diario |
 | `reports.mjs`, `access.mjs` | reportes de vecinos (validación, captcha, límites, confirmaciones) y accesos a la herramienta de análisis |
 | `scripts/admin.mjs` | administración desde el servidor: clave, accesos y moderación |
 | `public/` | interfaz (HTML + JS + CSS, sin build) |
@@ -193,6 +203,8 @@ curl -s https://tu-dominio/api/config    # debe devolver {"captcha":"0x…"} y n
 ```
 
 Sin las claves el servicio anda igual, sin captcha. La clave secreta no va nunca al repositorio ni al navegador.
+
+**Caddy: CSP y ubicación.** Los encabezados de seguridad del Caddyfile (`deploy/install-root.sh` los escribe) tienen que dejar pasar a Turnstile y al botón "mi ubicación": en `Content-Security-Policy`, `script-src`, `connect-src` y `frame-src` incluyen `https://challenges.cloudflare.com`, y en `Permissions-Policy` va `geolocation=(self)` (con `geolocation=()` el navegador bloquea la ubicación). Si el captcha no aparece, la consola del navegador muestra el bloqueo del CSP. En una instalación ya hecha se edita `/etc/caddy/Caddyfile` a mano y se recarga Caddy.
 
 **Primer arranque con base de datos**: al reiniciar el servicio con la versión nueva se migran solos los JSON de `/opt/caudal/data` (se ve en el log: `migración …`). Los JSON no se tocan.
 

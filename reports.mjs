@@ -6,14 +6,13 @@
 //
 // Defensas contra el abuso (ver README): captcha Cloudflare Turnstile (si hay claves), campo trampa, tiempo mínimo en el
 // formulario, límite por IP y por dispositivo, sin enlaces en la nota, reportes repetidos que se funden en uno,
-// vencimiento a las 48 h y moderación manual (ocultar, sin borrar).
+// vencimiento a las 72 h (con 24 h finales de transición en el mapa) y moderación manual (ocultar, sin borrar).
 import { createHash, randomBytes } from 'node:crypto';
 
 export const KINDS = { calle: 'Calle anegada', casas: 'Agua en viviendas', ruta: 'Ruta o camino cortado', rio: 'Río desbordado' };
 const BOX = { w: -72.5, e: -40, s: -42, n: -10 }; // la misma zona que cubre el mapa
-const TTL = 48 * 3600e3;       // cuánto dura un reporte sin confirmaciones
-const EXTEND = 24 * 3600e3;    // cada "sigue así" lo mantiene vivo un día más...
-const MAX_LIFE = 96 * 3600e3;  // ...hasta un máximo de 4 días desde que se hizo
+const TTL = 72 * 3600e3;       // cuánto dura un reporte (las últimas 24 h el mapa lo muestra en transición, ver public/reportes.js)
+const MAX_LIFE = 7 * 864e5;    // un "sigue así" lo renueva por otras 72 h, hasta un máximo de 7 días desde que se hizo
 const MAX_PER_DEVICE_DAY = 8;
 const MIN_FORM_MS = 2500;      // un humano tarda más que esto en completar el formulario
 const NOTE_MAX = 140;
@@ -22,7 +21,7 @@ const dayAR = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argent
 const fail = (status, error) => ({ status, body: { error } });
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
-export function createReports({ store, log, turnstile = {} }) {
+export function createReports({ store, log, turnstile = {}, onCreate = null }) {
   const { site = null, secret = null } = turnstile;
   if (!secret) log('reportes: sin TURNSTILE_SECRET_KEY, no se verifica captcha (solo límites y trampas)');
 
@@ -69,7 +68,9 @@ export function createReports({ store, log, turnstile = {} }) {
     const dup = store.get('SELECT id FROM reports WHERE rhash = ? AND kind = ? AND lat = ? AND lon = ? AND created > ? AND hidden = 0', rhash, b.kind, la, lo, now - 2 * 3600e3);
     if (dup) { store.run('UPDATE reports SET expires = MAX(expires, ?) WHERE id = ?', now + TTL, dup.id); return { status: 200, body: { id: dup.id, dup: true } }; }
     const r = store.run('INSERT INTO reports (created, expires, lat, lon, kind, sev, note, rhash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', now, now + TTL, la, lo, b.kind, sev, note, rhash);
-    return { status: 201, body: { id: Number(r.lastInsertRowid) } };
+    const id = Number(r.lastInsertRowid);
+    try { onCreate?.({ id, lat: la, lon: lo, kind: b.kind, sev, note }); } catch (e) { log('aviso de reporte nuevo:', e.message); } // un aviso que falla no debe romper el reporte
+    return { status: 201, body: { id } };
   }
 
   const SELECT = `SELECT r.id, r.created, r.expires, r.lat, r.lon, r.kind, r.sev, r.note, r.hidden,
@@ -91,7 +92,7 @@ export function createReports({ store, log, turnstile = {} }) {
     if (!r) return fail(404, 'Ese reporte ya no está.');
     store.tx(() => {
       store.run('INSERT OR REPLACE INTO report_votes (report_id, rhash, v, at) VALUES (?, ?, ?, ?)', id, device(ip, ua), b.v, now);
-      if (b.v === 'sigue') store.run('UPDATE reports SET expires = MIN(created + ?, MAX(expires, ?)) WHERE id = ?', MAX_LIFE, now + EXTEND, id);
+      if (b.v === 'sigue') store.run('UPDATE reports SET expires = MIN(created + ?, MAX(expires, ?)) WHERE id = ?', MAX_LIFE, now + TTL, id);
     });
     const u = store.get(`${SELECT} WHERE r.id = ?`, id);
     return { status: 200, body: { up: u.up, dn: u.dn, gone: resolved(u) } };

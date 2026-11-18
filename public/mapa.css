@@ -130,3 +130,8 @@ body.mapa { height: 100dvh; display: flex; flex-direction: column; overflow: hid
 #vec .dm-t { font-size: 10.5px; fill: #0e7490; font-weight: bold; }
 #view.sat #vec .dm { fill: #22d3ee; stroke: #000; stroke-width: 1.5px; }
 #view.sat #vec .dm-t { fill: #67e8f9; }
+
+/* tablet: el buscador se corre a la derecha del panel de capas (que ocupa 300 px) para no quedar tapado */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .search { left: 312px; transform: none; width: min(340px, calc(100% - 312px - 76px)); }
+}

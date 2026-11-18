@@ -4,6 +4,8 @@
 #vec .rp { stroke: #fff; stroke-width: 1.8px; stroke-linejoin: round; pointer-events: none; }
 #vec .rp.k-calle { fill: #3b82f6; } #vec .rp.k-casas { fill: #ef4444; } #vec .rp.k-ruta { fill: #f59e0b; } #vec .rp.k-rio { fill: #14b8a6; }
 #vec .rp.sel { stroke: #ffd400; stroke-width: 3px; }
+/* últimas 24 h: gris, con trazo punteado y cada vez más tenue (la opacidad la fija el script) */
+#vec .rp.fade { fill: #9ca3af; stroke-dasharray: 3 2; }
 #vec .rp.hid { fill-opacity: 0.25; stroke: var(--ink-3); stroke-dasharray: 3 2; }
 .rp-sw { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; flex: none; }
 .rp-sw.k-calle { background: #3b82f6; border-radius: 50%; } .rp-sw.k-casas { background: #ef4444; }
@@ -58,8 +60,7 @@ body.reporting #card { display: none; }
 .acc li { margin: 2px 0; } .acc li.off { opacity: 0.55; }
 
 @media (max-width: 760px) {
-  .rep-top { top: 8px; left: 8px; right: 62px; width: auto; }
-  .fab { bottom: 70px; }
+  .rep-top { top: 8px; left: 8px; right: 72px; width: auto; }
   #card:not([hidden]) ~ .fab { display: none; }
   .sheet { bottom: 4px; max-height: 78%; }
   body.reporting .rep-top, body.reporting .zoom-ctl { display: none; }
@@ -75,3 +76,7 @@ body.reporting #card { display: none; }
 .locsearch li.on, .locsearch li:hover { background: var(--code-bg); color: var(--code-ink); }
 .locsearch li small { color: var(--ink-2); } .locsearch li.on small, .locsearch li:hover small { color: inherit; }
 .gauge-card { font-size: 12.5px; line-height: 1.45; } .gauge-card .row { display: flex; justify-content: space-between; gap: 10px; }
+
+/* la atribución de abajo ocupa 2 líneas (tablet) o 3 (celular): la barra de compartir y el botón de reportar suben para no taparla */
+@media (max-width: 900px) { #share-bar { bottom: 46px; } .fab { bottom: 94px; } }
+@media (max-width: 520px) { #share-bar { bottom: 56px; } .fab { bottom: 104px; } }

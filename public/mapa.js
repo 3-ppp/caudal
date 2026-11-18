@@ -3,7 +3,7 @@
 // análisis para administración y autoridades (analisis.html). Motor propio y sin dependencias: grilla de mosaicos lat/lon (la
 // misma del servidor) y una capa vectorial en SVG que se reproyecta en cada cuadro.
 import { initShare } from './share.js';
-import { createReportLayer, KIND, SEV, SEV_SHORT, ago } from './reportes.js';
+import { createReportLayer, KIND, SEV, SEV_SHORT, ago, vigencia } from './reportes.js';
 import { captchaToken } from './captcha.js';
 import { createContext } from './contexto.js';
 
@@ -145,6 +145,7 @@ function drawCard() {
   card.innerHTML = `<button class="btn x" id="card-x" type="button" aria-label="Cerrar">x</button>` +
     `<p class="kicker">reporte-de-vecinos</p><h2><i class="rp-sw k-${r.k}"></i> ${esc(KIND[r.k].n)}</h2><div class="muted">${ago(r.t, serverNow)} · ${repDate(r.t)}</div>` +
     `<dl><dt>Cuánta agua</dt><dd>${esc(SEV[r.s])}</dd>` +
+    `<dt>Vigencia</dt><dd class="st ${vigencia(r, serverNow).k === 'fade' ? 'near' : ''}">${vigencia(r, serverNow).t}</dd>` +
     `<dt>Confirmaciones</dt><dd id="votes">${r.up} sigue · ${r.dn} ya bajó</dd>` +
     `<dt>Cerca (300 m, 24 h)</dt><dd>${near ? `${near} reporte${near === 1 ? '' : 's'} más` : 'ninguno'}</dd></dl>` +
     (r.n ? `<p class="rp-note">“${esc(r.n)}”</p>` : '') +

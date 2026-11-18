@@ -7,7 +7,7 @@ set -euo pipefail
 SSH_HOST=${SSH_HOST:?definir SSH_HOST, el alias SSH del servidor}
 cd "$(dirname "$0")/.."
 
-FILES="server.mjs analytics.mjs db.mjs reports.mjs access.mjs sources public layers scripts stations.json data/stations.calibrated.json data/umbrales.json deploy README.md"
+FILES="server.mjs analytics.mjs db.mjs reports.mjs access.mjs notify.mjs sources public layers scripts stations.json data/stations.calibrated.json data/umbrales.json deploy README.md"
 echo "subiendo a $SSH_HOST…"
 tar czf - $FILES | ssh "$SSH_HOST" '
   set -e

@@ -9,6 +9,15 @@ export const KIND = {
 export const SEV = { 1: 'poca agua (hasta el tobillo)', 2: 'agua media (hasta la rodilla)', 3: 'mucha agua (no se puede pasar)' };
 export const SEV_SHORT = { 1: 'poca', 2: 'media', 3: 'mucha' };
 
+// las últimas 24 h antes de vencer, el marcador pasa a gris y se va apagando; un "sigue así" lo renueva
+export const FADE_MS = 24 * 3600e3;
+export function vigencia(r, now = Date.now()) {
+  const rem = r.x - now;
+  if (rem <= 0) return { k: 'gone', t: 'vencido' };
+  if (rem < FADE_MS) return { k: 'fade', t: `por vencer · se retira en ${Math.max(1, Math.ceil(rem / 3600e3))} h` };
+  return { k: 'live', t: 'vigente' };
+}
+
 export const ago = (ms, now = Date.now()) => {
   const m = Math.max(0, Math.round((now - ms) / 60e3));
   if (m < 1) return 'recién';
@@ -51,8 +60,9 @@ export function createReportLayer({ parent, el }) {
         if (x < -20 || x > W + 20 || y < -20 || y > H + 20) { n.style.display = 'none'; return; }
         n.style.display = '';
         n.setAttribute('d', SHAPE[r.k](+x.toFixed(1), +y.toFixed(1), (5 + 2.5 * r.s) * k));
-        const old = (now - r.t) / 3600e3; // cuanto más viejo, más tenue
-        n.style.opacity = old < 6 ? 1 : old < 24 ? 0.8 : 0.6;
+        const rem = r.x - now, fading = rem < FADE_MS;
+        n.classList.toggle('fade', fading);
+        n.style.opacity = fading ? Math.max(0.3, 0.3 + 0.7 * Math.max(rem, 0) / FADE_MS) : 1;
       });
     },
     // el marcador más cercano al punto (px, py) dentro de `rad` píxeles

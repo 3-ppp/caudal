@@ -120,8 +120,8 @@ $DOMAIN {
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
-		Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
-		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(self), interest-cohort=()"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 		-Server
 	}
 	reverse_proxy 127.0.0.1:$PORT

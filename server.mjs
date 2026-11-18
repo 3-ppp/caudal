@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { createAnalytics } from './analytics.mjs';
 import { createReports } from './reports.mjs';
 import { createAccess } from './access.mjs';
+import { createNotifier } from './notify.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
@@ -713,8 +714,14 @@ const server = createServer(async (req, res) => {
         return res.end(img);
       } catch (e) { return sendText(res, 404, e.message); }
     }
-    if ((p === '/' || p === '/index.html' || p === '/mapa.html') && req.method === 'GET') analytics.pageView(req, p === '/mapa.html' ? 'mapa' : 'monitor', url.searchParams.get('via'));
-    const rel = p === '/' ? 'index.html' : p === '/analisis' ? 'analisis.html' : decodeURIComponent(p).replace(/^\/+/, '');
+    // URLs sin extensión: /mapa y /analisis. Los enlaces viejos a /mapa.html (y las barras finales) redirigen con 301, conservando ?via= y el #hash
+    if (['/mapa.html', '/mapa/', '/analisis.html', '/analisis/'].includes(p) && (req.method === 'GET' || req.method === 'HEAD')) {
+      res.writeHead(301, { location: p.replace(/(\.html|\/)$/, '') + url.search, 'cache-control': 'public, max-age=3600' });
+      return res.end();
+    }
+    if ((p === '/' || p === '/index.html' || p === '/mapa') && req.method === 'GET') analytics.pageView(req, p === '/mapa' ? 'mapa' : 'monitor', url.searchParams.get('via'));
+    const PAGE_FILES = { '/': 'index.html', '/mapa': 'mapa.html', '/analisis': 'analisis.html' };
+    const rel = PAGE_FILES[p] ?? decodeURIComponent(p).replace(/^\/+/, '');
     const file = path.join(PUBLIC, rel);
     if (!file.startsWith(PUBLIC + path.sep)) return sendText(res, 403, 'prohibido');
     // no-cache + ETag: el navegador revalida y, si no cambió, recibe un 304 sin cuerpo
@@ -732,10 +739,12 @@ const stationNames = Object.fromEntries(allStations.map((s) => [s.id, s.kind ===
 const analytics = await createAnalytics({ store, ownHost: process.env.SITE_HOST || null,
   stationIds: new Set(allStations.map((s) => s.id)), log });
 const access = createAccess({ store, isAdminKey: analytics.authorized });
-const reports = createReports({ store, log, turnstile: { site: process.env.TURNSTILE_SITE_KEY || null, secret: process.env.TURNSTILE_SECRET_KEY || null } });
+const notifier = createNotifier({ store, analytics, root: ROOT, log }); // avisos por Telegram (opcional)
+const reports = createReports({ store, log, onCreate: notifier.newReport, turnstile: { site: process.env.TURNSTILE_SITE_KEY || null, secret: process.env.TURNSTILE_SECRET_KEY || null } });
 // al apagar (deploy, reinicio) se guardan los totales pendientes
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => analytics.flush().catch(() => {}).finally(() => { try { store.close(); } catch {} process.exit(0); }));
 server.listen(PORT, HOST, () => log(`Caudal en http://${HOST}:${PORT} · datos en ${DATA}`));
+notifier.start();
 try {
   const updated = store.docUpdated('latest');
   // se actualiza si los datos son viejos o si se agregaron puntos al río desde la última vez
